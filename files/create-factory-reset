@@ -1,0 +1,287 @@
+#!/bin/bash
+
+BASE=2018-03-13-raspbian-stretch-lite
+
+function main()
+{
+
+# base image
+IMG_ORIG=${BASE}.img
+# img to create
+IMG_RESTORE=${BASE}.restore.img
+# img for use as the source of the rootfs
+IMG_LIVE=${BASE}.live.img
+
+RECOVERY_SCRIPT=/usr/lib/raspi-config/init_resize2.sh
+
+# because cloning, need to generate new UUIDs, partuuid get reset
+# UUID_BOOT=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null  | \
+#         dd bs=1 count=8 2>/dev/null)
+UUID_RESTORE=$(uuidgen)
+UUID_ROOTFS=$(uuidgen)
+
+# partuuid seems to get reset by resize.sh, however UUID doesn't seem to work
+PARTUUID=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
+pr_header "PARTUUID generated is ${PARTUUID}"
+
+# also should inspect first...
+pr_header "detach any existing loop devices"
+losetup --detach-all
+
+pr_header "make a copy of the pristine image for use as the live rootfs"
+[[ -f "${IMG_LIVE}" ]] && \
+{
+  pr_warn "live file ${IMG_LIVE} already, exists"
+} || \
+{
+  cp -f ${IMG_ORIG} ${IMG_LIVE}
+  pr_ok "${IMG_LIVE} created"
+}
+
+pr_header "create an img file for boot, recovery, rootfs filesystems"
+# this would need to be much bigger for the desktop/full fat img
+[[ -f "${IMG_RESTORE}" ]] && \
+{
+  pr_warn "restore file ${IMG_RESTORE} already, exists"
+} || \
+{
+  dd if=/dev/zero bs=4M count=2000 > ${IMG_RESTORE}
+}
+
+pr_header "Verify that the img file was created"
+fdisk -lu ${IMG_RESTORE}
+
+pr_header "create the filesystem on the img file"
+# TODO need to calculate this from the source img partition sizes
+sfdisk ${IMG_RESTORE} <<EOL
+label: dos
+label-id: 0x${PARTUUID}
+unit: sectors
+
+${IMG_RESTORE}1 : start=8192, size=85611, type=c
+${IMG_RESTORE}2 : start=98304, size=8388608, type=83
+${IMG_RESTORE}3 : start=8486920, size=4194296, type=83
+
+EOL
+
+pr_header "Verify that the new filesystem structure"
+fdisk -lu ${IMG_RESTORE}
+
+pr_header "map the img file to loopback device"
+losetup -v -f ${IMG_RESTORE}
+
+pr_header "partprobe the device???"
+partprobe ${IMG_RESTORE}
+
+pr_header "show the partitions"
+losetup -a
+
+##losetup --show -f -P /root/2018-03-13-raspbian-stretch-lite.restore.img
+
+pr_header "mount the partitions"
+partx --show /dev/loop0
+
+pr_header "find the partitions and add them to loopXpX devices"
+partx -v --add /dev/loop0
+
+# pr_header "map the live img to loopback device"
+# losetup -v -f ${IMG_LIVE}
+# partx -v --add /dev/loop0
+losetup --show -f -P 2018-03-13-raspbian-stretch-lite.live.img
+
+cat /proc/partitions
+losetup -a
+
+pr_header "copy the filesystem partitions to the restore img"
+dd if=/dev/loop1p1 of=/dev/loop0p1 bs=4M
+dd if=/dev/loop1p2 of=/dev/loop0p2 bs=4M
+dd if=/dev/loop1p2 of=/dev/loop0p3 bs=4M
+
+#mkdosfs -i ${UUID_BOOT} /dev/loop0p1
+UUID_BOOT=$(blkid -o export /dev/loop0p1 | egrep '^UUID=' | cut -d'=' -f2)
+
+tune2fs /dev/loop0p2 -U ${UUID_RESTORE}
+e2label /dev/loop0p2 recoveryfs
+tune2fs /dev/loop0p3 -U ${UUID_ROOTFS}
+
+partprobe /dev/loop0
+
+pr_header "resize the fs on the recovery partition to fit the restore img"
+resize2fs /dev/loop0p2
+
+fdisk -lu /dev/loop0
+
+mkdir -p mnt/restore_boot
+mkdir -p mnt/restore_recovery
+mkdir -p mnt/restore_rootfs
+
+mount /dev/loop0p1 mnt/restore_boot
+mount /dev/loop0p2 mnt/restore_recovery
+mount /dev/loop0p3 mnt/restore_rootfs
+
+pr_header "current boot cmdline.txt"
+cat mnt/restore_boot/cmdline.txt
+
+pr_header "boot from live rootfs"
+cat << EOF > mnt/restore_boot/cmdline.txt
+dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=PARTUUID=${PARTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=/usr/lib/raspi-config/init_resize.sh
+EOF
+
+## this not working, as it gets over written
+pr_header "backup original cmdline.txt"
+[[ -f mnt/restore_boot/cmdline.txt_original ]] && \
+{
+  pr_warn "original already  existing, not blatting...."
+} || \
+{
+cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
+# ls mnt/restore_boot/cmdline.txt_original
+# cat mnt/restore_boot/cmdline.txt_original
+pr_ok "copied to original"
+}
+
+pr_header "create alt cmd file for recovery boot"
+cat << EOF > mnt/restore_boot/cmdline.txt_recovery
+dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=PARTUUID=XXXYYYXXX rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=${RECOVERY_SCRIPT}
+EOF
+## not working;
+# init=/boot/factory_reset_restore
+
+pr_header "create factory reset script - run this from live"
+cat << EOF > mnt/restore_boot/factory_reset
+#!/bin/bash
+
+echo "factory restore script"
+
+[[ "\$1" == "--reset" ]] && \
+{
+  echo "resetting"
+  cp -f /boot/cmdline.txt /boot/cmdline.txt_original
+  cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
+  sed -i "s/XXXYYYXXX/\$(blkid -o export  \
+        /dev/disk/by-uuid/${UUID_RESTORE}  | \
+         egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
+  echo "rebooting..."
+  reboot
+  exit 0
+}
+
+[[ "\$1" == "--restore" ]] && \
+{
+  echo "looking for recovery image"
+
+  [[ -f /opt/recovery.img ]] && \
+  {
+    echo "found recovery image, restoring it"
+    dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
+    cp -f /boot/cmdline.txt_original /boot/cmdline.txt
+
+  } || \
+  {
+    echo no recovery file... should be /opt/recovery.img
+    exit 99
+  }
+}
+
+EOF
+
+pr_header "create factory reset script - run this from live"
+cat << 'EOF' > mnt/restore_boot/factory_reset_restore
+#!/bin/sh
+
+echo "factory restore script"
+
+# echo "found recovery image, restoring it"
+dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
+
+cp -f /boot/cmdline.txt_original /boot/cmdline.txt
+
+reboot
+
+EOF
+
+cp init_resize2.sh mnt/restore_recovery${RECOVERY_SCRIPT}
+chmod +x mnt/restore_recovery${RECOVERY_SCRIPT}
+
+
+chmod +x mnt/restore_boot/factory_reset
+chmod +x mnt/restore_boot/factory_reset_restore
+
+pr_header "current boot cmdline.txt"
+cat mnt/restore_boot/cmdline.txt
+
+pr_header "current boot cmdline.txt txt_recovery"
+cat mnt/restore_boot/cmdline.txt_recovery
+
+# enable ssh on the image
+touch mnt/restore_boot/ssh
+
+pr_header "current recovery fstab"
+cat mnt/restore_recovery/etc/fstab
+
+pr_header "indicate this is a recovery shell"
+cat << EOF > mnt/restore_recovery/etc/motd
+##    ____  _____ ____ _____     _______ ______   __
+##   |  _ \| ____/ ___/ _ \ \   / / ____|  _ \ \ / /
+##   | |_) |  _|| |  | | | \ \ / /|  _| | |_) \ V /
+##   |  _ <| |__| |__| |_| |\ V / | |___|  _ < | |
+##   |_| \_\_____\____\___/  \_/  |_____|_| \_\|_|
+##
+EOF
+
+pr_header "map the recovery fstab to the 2nd partition"
+cat << EOF > mnt/restore_recovery/etc/fstab
+proc                    /proc  proc    defaults          0       0
+UUID=${UUID_BOOT}       /boot  vfat    defaults          0       2
+UUID=${UUID_RESTORE}    /      ext4    defaults,noatime  0       1
+EOF
+
+pr_header "indicate this it is the live shell"
+cat << EOF > mnt/restore_rootfs/etc/motd
+##    _     _____     _______
+##   | |   |_ _\ \   / / ____|
+##   | |    | | \ \ / /|  _|
+##   | |___ | |  \ V / | |___
+##   |_____|___|  \_/  |_____|
+##
+EOF
+
+pr_header "current live fstab"
+cat mnt/restore_rootfs/etc/fstab
+
+pr_header "map the live fstab to the 3rd partition"
+cat << EOF > mnt/restore_rootfs/etc/fstab
+proc                     /proc  proc    defaults          0       0
+UUID=${UUID_BOOT}  /boot  vfat    defaults          0       2
+UUID=${UUID_ROOTFS}  /      ext4    defaults,noatime  0       1
+EOF
+
+umount -f mnt/restore_boot
+umount -f mnt/restore_rootfs
+
+pr_header "copy the recovery image to the recovery /opt dir for restoring"
+dd if=/dev/loop0p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
+
+umount -f mnt/restore_recovery
+
+pr_header "detach loop devices"
+losetup --detach-all
+
+pr_header "recovery image..."
+pr_ok "recovery image is ${IMG_RESTORE}"
+
+}
+
+# get current source dir, even if its hidden in links
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+source ${DIR}/display_funcs
+
+main
+
