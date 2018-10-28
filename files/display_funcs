@@ -99,7 +99,7 @@ pr_header()
     line="$@"
       echo ""
        echo -en "${BLUE}${WHITEBG}"
-       printf "%s" "${line:0:80}"
+       printf "%s" "${line:0:100}"
        echo -en "${RESET}"
        echo
 
@@ -108,7 +108,7 @@ pr_header()
   while read -r  line; do
       # printf "%s" "$data"
        echo -en "${PINK}"
-       printf "%s" "${line:0:80}"
+       printf "%s" "${line:0:100}"
        echo -en "${RESET}"
        echo
   done
