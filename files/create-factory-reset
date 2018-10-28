@@ -1,17 +1,29 @@
 #!/bin/bash
 
-BASE=2018-03-13-raspbian-stretch-lite
+# fail on errors
+set -e
+
+# BASE=2018-03-13-raspbian-stretch-lite
+# BASE=2018-06-27-raspbian-stretch-lite
+BASE=2018-10-09-raspbian-stretch-lite
+
+raspian_lite_06_27_sha256=3271b244734286d99aeba8fa043b6634cad488d211583814a2018fc14fdca313
+
+init_resize_script=~/ansible/roles/limepepper.raspberrypi/files/init_resize2.sh
 
 function main()
 {
 
-# base image
+# base image file
 IMG_ORIG=${BASE}.img
-# img to create
+
+# img to create (this is the file that should be flashed out)
 IMG_RESTORE=${BASE}.restore.img
-# img for use as the source of the rootfs
+
+# img for use as the source of the rootfs, used as intermediate image
 IMG_LIVE=${BASE}.live.img
 
+# path to file that is used...???
 RECOVERY_SCRIPT=/usr/lib/raspi-config/init_resize2.sh
 
 # because cloning, need to generate new UUIDs, partuuid get reset
@@ -25,10 +37,21 @@ PARTUUID=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
 pr_header "PARTUUID generated is ${PARTUUID}"
 
 # also should inspect first...
-pr_header "detach any existing loop devices"
-losetup --detach-all
+pr_header "1.1 detach any existing loop devices, mounts"
 
-pr_header "make a copy of the pristine image for use as the live rootfs"
+sudo losetup --detach-all
+
+sudo umount -f -d mnt/restore_boot || true
+sudo umount -f mnt/restore_boot || true
+
+sudo umount -f -d mnt/restore_rootfs || true
+sudo umount -f mnt/restore_rootfs || true
+
+sudo umount -f -d mnt/restore_recovery || true
+sudo umount -f mnt/restore_recovery || true
+
+pr_header "2.2 make a copy of the pristine image for use as the live rootfs"
+
 [[ -f "${IMG_LIVE}" ]] && \
 {
   pr_warn "live file ${IMG_LIVE} already, exists"
@@ -38,37 +61,84 @@ pr_header "make a copy of the pristine image for use as the live rootfs"
   pr_ok "${IMG_LIVE} created"
 }
 
-pr_header "create an img file for boot, recovery, rootfs filesystems"
+pr_header "2.3 create an img file for boot, recovery, rootfs filesystems"
+
 # this would need to be much bigger for the desktop/full fat img
 [[ -f "${IMG_RESTORE}" ]] && \
 {
   pr_warn "restore file ${IMG_RESTORE} already, exists"
 } || \
 {
-  dd if=/dev/zero bs=4M count=2000 > ${IMG_RESTORE}
+  dd if=/dev/zero bs=4M count=1000 > ${IMG_RESTORE}
+  # touch ${IMG_RESTORE}
 }
 
-pr_header "Verify that the img file was created"
+pr_header "2.4 Verify that the img file was created"
 fdisk -lu ${IMG_RESTORE}
 
-pr_header "create the filesystem on the img file"
-# TODO need to calculate this from the source img partition sizes
+pr_header "2.5 create the filesystem on the img file"
+
+# PTABLE_ID=$(echo $PTABLE | jq '.partitiontable.id')
+
+PTABLE="$(sfdisk -d ${IMG_ORIG})"
+#get the device name for use in the greps
+PTABLE_DEVICE=$(echo "${PTABLE}" | egrep '^device: ' | cut -d' ' -f2)
+#get the existing sector start/sizes
+PTABLE_P1_START=$(echo "${PTABLE}" | egrep "^${PTABLE_DEVICE}1" | tr -s ' '| cut -d' ' -f4 | tr -d ',')
+PTABLE_P1_SIZE=$(echo "${PTABLE}" | egrep "^${PTABLE_DEVICE}1" | tr -s ' '| cut -d' ' -f6 | tr -d ',')
+PTABLE_P2_START=$(echo "${PTABLE}" | egrep "^${PTABLE_DEVICE}2" | tr -s ' '| cut -d' ' -f4 | tr -d ',')
+PTABLE_P2_SIZE=$(echo "${PTABLE}" | egrep "^${PTABLE_DEVICE}2" | tr -s ' '| cut -d' ' -f6 | tr -d ',')
+
+echo "found boot partition at ${PTABLE_P1_START} with size ${PTABLE_P1_SIZE}"
+echo "found root partition at ${PTABLE_P2_START} with size ${PTABLE_P2_SIZE}"
+
+sudo fdisk -l 2018-06-27-raspbian-stretch-lite.img | grep 'Sector size'
+
+# set the size of the new recovery partition in bytes
+## $(( 2 * 1024**3 )) e.g. 2GiB
+# this should be a multipe of 512 otherwise bad things might happen
+P2_NEWSIZE_BYTES=2147483648
+
+# how many sectors is that?
+P2_SECTORS=$(( ${P2_NEWSIZE_BYTES} / 512 ))
+echo "P2 sectors is ${P2_SECTORS}"
+
+P2_END=$(( PTABLE_P2_START + ${P2_SECTORS} ))
+echo "P2_END is ${P2_END}"
+
+# use the sector at the end of P2, find how many bytes that is
+# start P3 at the next 8192 boundary after that
+PTABLE_P3_START=$(( ((((( P2_END * 512 ) / 8192) + 1) * 8192)/512) ))
+
+pr_warn "making partition table..."
+cat <<EOL
+label: dos
+label-id: 0x${PARTUUID}
+unit: sectors
+
+${IMG_RESTORE}1 : start=${PTABLE_P1_START}, size=${PTABLE_P1_SIZE}, type=c
+${IMG_RESTORE}2 : start=${PTABLE_P2_START}, size=${P2_SECTORS}, type=83
+${IMG_RESTORE}3 : start=${PTABLE_P3_START}, size=${PTABLE_P2_SIZE}, type=83
+
+EOL
+
 sfdisk ${IMG_RESTORE} <<EOL
 label: dos
 label-id: 0x${PARTUUID}
 unit: sectors
 
-${IMG_RESTORE}1 : start=8192, size=85611, type=c
-${IMG_RESTORE}2 : start=98304, size=8388608, type=83
-${IMG_RESTORE}3 : start=8486920, size=4194296, type=83
+${IMG_RESTORE}1 : start=${PTABLE_P1_START}, size=${PTABLE_P1_SIZE}, type=c
+${IMG_RESTORE}2 : start=${PTABLE_P2_START}, size=${P2_SECTORS}, type=83
+${IMG_RESTORE}3 : start=${PTABLE_P3_START}, size=${PTABLE_P2_SIZE}, type=83
 
 EOL
 
-pr_header "Verify that the new filesystem structure"
+pr_header "2.6 Verify that the new filesystem structure"
 fdisk -lu ${IMG_RESTORE}
 
-pr_header "map the img file to loopback device"
-losetup -v -f ${IMG_RESTORE}
+pr_header "2.7 map the img file to loopback device"
+sudo losetup -v  --show -f -P ${IMG_RESTORE}
+#sudo losetup --show -f -P ${IMG_LIVE}
 
 pr_header "partprobe the device???"
 partprobe ${IMG_RESTORE}
@@ -78,77 +148,103 @@ losetup -a
 
 ##losetup --show -f -P /root/2018-03-13-raspbian-stretch-lite.restore.img
 
-pr_header "mount the partitions"
-partx --show /dev/loop0
+pr_header "3.1 mount the partitions"
+#sudo partx --show /dev/loop0
 
 pr_header "find the partitions and add them to loopXpX devices"
-partx -v --add /dev/loop0
+#sudo partx -v --add /dev/loop0
 
-# pr_header "map the live img to loopback device"
+pr_header "3.3 map the live img to loopback device"
 # losetup -v -f ${IMG_LIVE}
 # partx -v --add /dev/loop0
-losetup --show -f -P 2018-03-13-raspbian-stretch-lite.live.img
+sudo losetup --show -f -P ${IMG_LIVE}
 
 cat /proc/partitions
-losetup -a
+sudo losetup -a
 
-pr_header "copy the filesystem partitions to the restore img"
-dd if=/dev/loop1p1 of=/dev/loop0p1 bs=4M
-dd if=/dev/loop1p2 of=/dev/loop0p2 bs=4M
-dd if=/dev/loop1p2 of=/dev/loop0p3 bs=4M
+pr_header "3.4 copy the filesystem partitions to the restore img"
+sudo dd if=/dev/loop1p1 of=/dev/loop0p1 bs=4M
+sudo dd if=/dev/loop1p2 of=/dev/loop0p2 bs=4M
+sudo dd if=/dev/loop1p2 of=/dev/loop0p3 bs=4M
 
+pr_header "3.5 set the UUID_BOOT from the loop0p1"
 #mkdosfs -i ${UUID_BOOT} /dev/loop0p1
 UUID_BOOT=$(blkid -o export /dev/loop0p1 | egrep '^UUID=' | cut -d'=' -f2)
 
-tune2fs /dev/loop0p2 -U ${UUID_RESTORE}
-e2label /dev/loop0p2 recoveryfs
-tune2fs /dev/loop0p3 -U ${UUID_ROOTFS}
+pr_warn "blkid -o export /dev/loop0p1  is $(blkid -o export /dev/loop0p1 )"
+pr_warn "UUID_BOOT is ${UUID_BOOT}"
 
-partprobe /dev/loop0
+[  -z "$UUID_BOOT" ] && \
+{
+  echo "Empty: Yes"
+  exit 99
+} || \
+{
+  echo "Empty: No"
+  pr_warn "blkid -o export /dev/loop0p1  is $(blkid -o export /dev/loop0p1 )"
+  pr_warn "UUID_BOOT is ${UUID_BOOT}"
+}
 
-pr_header "resize the fs on the recovery partition to fit the restore img"
-resize2fs /dev/loop0p2
+pr_header "3.6 call tunefs"
+sudo tune2fs /dev/loop0p2 -U ${UUID_RESTORE}
+sudo e2label /dev/loop0p2 recoveryfs
+sudo tune2fs /dev/loop0p3 -U ${UUID_ROOTFS}
 
-fdisk -lu /dev/loop0
+pr_header "3.7 call partprobe"
+sudo partprobe /dev/loop0
+
+pr_header "3.8 resize the fs on the recovery partition to fit the restore img"
+sudo e2fsck -f /dev/loop0p2
+sudo resize2fs /dev/loop0p2
+
+sudo fdisk -lu /dev/loop0
 
 mkdir -p mnt/restore_boot
 mkdir -p mnt/restore_recovery
 mkdir -p mnt/restore_rootfs
 
-mount /dev/loop0p1 mnt/restore_boot
-mount /dev/loop0p2 mnt/restore_recovery
-mount /dev/loop0p3 mnt/restore_rootfs
+sudo mount /dev/loop0p1 mnt/restore_boot
+sudo mount /dev/loop0p2 mnt/restore_recovery
+sudo mount /dev/loop0p3 mnt/restore_rootfs
 
-pr_header "current boot cmdline.txt"
+pr_header "4.0 current boot cmdline.txt"
 cat mnt/restore_boot/cmdline.txt
 
-pr_header "boot from live rootfs"
-cat << EOF > mnt/restore_boot/cmdline.txt
+pr_header "4.1 create the boot from live rootfs cmdline.txt"
+sudo tee mnt/restore_boot/cmdline.txt << EOF
 dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=PARTUUID=${PARTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=/usr/lib/raspi-config/init_resize.sh
 EOF
 
 ## this not working, as it gets over written
-pr_header "backup original cmdline.txt"
+pr_header "4.2 backup original cmdline.txt"
 [[ -f mnt/restore_boot/cmdline.txt_original ]] && \
 {
-  pr_warn "original already  existing, not blatting...."
+  pr_warn "original already  existing, over writing...."
+  sudo cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
+  pr_ok "copied to original"
 } || \
 {
-cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
-# ls mnt/restore_boot/cmdline.txt_original
-# cat mnt/restore_boot/cmdline.txt_original
-pr_ok "copied to original"
+  sudo cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
+  # ls mnt/restore_boot/cmdline.txt_original
+  # cat mnt/restore_boot/cmdline.txt_original
+  pr_ok "copied to original"
 }
 
-pr_header "create alt cmd file for recovery boot"
-cat << EOF > mnt/restore_boot/cmdline.txt_recovery
+pr_header "4.3 create alt cmd file for recovery boot"
+sudo tee mnt/restore_boot/cmdline.txt_recovery << EOF
 dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=PARTUUID=XXXYYYXXX rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=${RECOVERY_SCRIPT}
 EOF
 ## not working;
 # init=/boot/factory_reset_restore
 
-pr_header "create factory reset script - run this from live"
-cat << EOF > mnt/restore_boot/factory_reset
+#   ___        _               ___         _      _
+#  | _ \___ __| |_ ___ _ _ ___/ __| __ _ _(_)_ __| |_
+#  |   / -_|_-<  _/ _ \ '_/ -_)__ \/ _| '_| | '_ \  _|
+#  |_|_\___/__/\__\___/_| \___|___/\__|_| |_| .__/\__|
+#                                           |_|
+
+pr_header "4.4 create factory reset script - run this from live"
+sudo tee mnt/restore_boot/factory_reset << EOF
 #!/bin/bash
 
 echo "factory restore script"
@@ -166,61 +262,50 @@ echo "factory restore script"
   exit 0
 }
 
-[[ "\$1" == "--restore" ]] && \
-{
-  echo "looking for recovery image"
-
-  [[ -f /opt/recovery.img ]] && \
-  {
-    echo "found recovery image, restoring it"
-    dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
-    cp -f /boot/cmdline.txt_original /boot/cmdline.txt
-
-  } || \
-  {
-    echo no recovery file... should be /opt/recovery.img
-    exit 99
-  }
-}
-
 EOF
 
-pr_header "create factory reset script - run this from live"
-cat << 'EOF' > mnt/restore_boot/factory_reset_restore
+pr_header "4.6 create factory reset script - run this from live"
+sudo tee mnt/restore_boot/factory_reset_restore << 'EOF'
 #!/bin/sh
 
 echo "factory restore script"
 
-# echo "found recovery image, restoring it"
-dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
+# dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
+unzip -p /opt/recovery.img.zip \
+      | dd bs=4M \
+        of=/dev/mmcblk0p3 \
+        conv=fsync \
+        status=progress
 
 cp -f /boot/cmdline.txt_original /boot/cmdline.txt
+touch /boot/ssh
 
 reboot
 
 EOF
 
-cp init_resize2.sh mnt/restore_recovery${RECOVERY_SCRIPT}
-chmod +x mnt/restore_recovery${RECOVERY_SCRIPT}
+pr_header "4.7 copy init_resize2.sh to recovery"
+sudo cp ${init_resize_script} mnt/restore_recovery${RECOVERY_SCRIPT}
+sudo chmod +x mnt/restore_recovery${RECOVERY_SCRIPT}
 
 
-chmod +x mnt/restore_boot/factory_reset
-chmod +x mnt/restore_boot/factory_reset_restore
+sudo chmod +x mnt/restore_boot/factory_reset
+sudo chmod +x mnt/restore_boot/factory_reset_restore
 
-pr_header "current boot cmdline.txt"
+pr_header "4.8 current boot cmdline.txt"
 cat mnt/restore_boot/cmdline.txt
 
-pr_header "current boot cmdline.txt txt_recovery"
+pr_header "4.9 current boot cmdline.txt txt_recovery"
 cat mnt/restore_boot/cmdline.txt_recovery
 
-# enable ssh on the image
-touch mnt/restore_boot/ssh
+pr_header "4.9.1 enable ssh on the image"
+sudo touch mnt/restore_boot/ssh
 
-pr_header "current recovery fstab"
+pr_header "4.10 current recovery fstab"
 cat mnt/restore_recovery/etc/fstab
 
-pr_header "indicate this is a recovery shell"
-cat << EOF > mnt/restore_recovery/etc/motd
+pr_header "4.11 indicate this is a recovery shell"
+sudo tee mnt/restore_recovery/etc/motd << EOF
 ##    ____  _____ ____ _____     _______ ______   __
 ##   |  _ \| ____/ ___/ _ \ \   / / ____|  _ \ \ / /
 ##   | |_) |  _|| |  | | | \ \ / /|  _| | |_) \ V /
@@ -230,14 +315,14 @@ cat << EOF > mnt/restore_recovery/etc/motd
 EOF
 
 pr_header "map the recovery fstab to the 2nd partition"
-cat << EOF > mnt/restore_recovery/etc/fstab
+sudo tee mnt/restore_recovery/etc/fstab << EOF
 proc                    /proc  proc    defaults          0       0
 UUID=${UUID_BOOT}       /boot  vfat    defaults          0       2
 UUID=${UUID_RESTORE}    /      ext4    defaults,noatime  0       1
 EOF
 
 pr_header "indicate this it is the live shell"
-cat << EOF > mnt/restore_rootfs/etc/motd
+sudo tee mnt/restore_rootfs/etc/motd << EOF
 ##    _     _____     _______
 ##   | |   |_ _\ \   / / ____|
 ##   | |    | | \ \ / /|  _|
@@ -246,30 +331,103 @@ cat << EOF > mnt/restore_rootfs/etc/motd
 ##
 EOF
 
-pr_header "current live fstab"
-cat mnt/restore_rootfs/etc/fstab
+  pr_header "current live fstab"
+  cat mnt/restore_rootfs/etc/fstab
 
-pr_header "map the live fstab to the 3rd partition"
-cat << EOF > mnt/restore_rootfs/etc/fstab
+  pr_header "map the live fstab to the 3rd partition"
+
+sudo tee mnt/restore_rootfs/etc/fstab << EOF
 proc                     /proc  proc    defaults          0       0
 UUID=${UUID_BOOT}  /boot  vfat    defaults          0       2
 UUID=${UUID_ROOTFS}  /      ext4    defaults,noatime  0       1
 EOF
 
-umount -f mnt/restore_boot
-umount -f mnt/restore_rootfs
 
-pr_header "copy the recovery image to the recovery /opt dir for restoring"
-dd if=/dev/loop0p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
+pr_header "change the pi user password"
 
-umount -f mnt/restore_recovery
+[  -z "$SET_PI_PASSWORD" ] && \
+{
+  echo "Not setting pi password"
+} || \
+{
 
-pr_header "detach loop devices"
-losetup --detach-all
+  newsalt=$(pwgen -s 12 1)
+  # @TODO add parameter for password setting
+  newpass_raw="xxx"
+  newpass_cmd="perl -e 'print crypt(\"${newpass_raw}\",\"\\\$6\\\$${newsalt}\\$\") . \"\n\"'"
+  echo "newpass_cmd is ${newpass_cmd}"
+  newpass=$(eval ${newpass_cmd})
 
-pr_header "recovery image..."
-pr_ok "recovery image is ${IMG_RESTORE}"
+# perl -pe 's|(root):(\$.*?:)|\1:\$6\$SALTsalt\$UiZikbV3VeeBPsg8./Q5DAfq9aj7CVZMDU6ffBiBLgUEpxv7LMXKbcZ9JSZnYDrZQftdG319XkbLVMvWcF/Vr/:|' /etc/shadow > /etc/shadow.new
 
+#sudo sed "s/^pi:\(.*\):\(.*\):\(.*\):\(.*\):\(.*\):\(.*\):\(.*\)/pi:${newpass}:\2:\3:\4:\5:\6:\7/" mnt/restore_rootfs/etc/shadow
+
+  pr_alert "insert the pi user password"
+  sudo awk -v var="${newpass}" \
+      -F: 'BEGIN{OFS=":";} $1=="pi"{$2=var}1' \
+      mnt/restore_rootfs/etc/shadow \
+      > shadow.1 \
+      && sudo cp -f shadow.1 mnt/restore_rootfs/etc/shadow
+
+  sudo chown 0:42   mnt/restore_rootfs/etc/shadow
+  sudo chmod 640   mnt/restore_rootfs/etc/shadow
+
+  sudo awk -v var="${newpass}" \
+      -F: 'BEGIN{OFS=":";} $1=="pi"{$2=var}1' \
+      mnt/restore_recovery/etc/shadow \
+      > shadow.2 \
+      && sudo cp -f shadow.2 mnt/restore_recovery/etc/shadow
+
+  sudo chown 0:42   mnt/restore_recovery/etc/shadow
+  sudo chmod 640   mnt/restore_recovery/etc/shadow
+
+}
+
+
+# perl -pe 's|(root):(\$.*?:)|\1:\$6\$SALTsalt\$UiZikbV3VeeBPsg8./Q5DAfq9aj7CVZMDU6ffBiBLgUEpxv7LMXKbcZ9JSZnYDrZQftdG319XkbLVMvWcF/Vr/:|' \
+# /etc/shadow > /etc/shadow.new
+# python -c "import crypt, getpass, pwd; \
+#          print crypt.crypt('password', '\$6\$SALTsalt\$')"
+
+  pr_header "copy the recovery image to the recovery /opt dir for restoring"
+
+  # dd if=/dev/loop0p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
+  sudo dd bs=4M if=/dev/loop0p3 | sudo zip mnt/restore_recovery/opt/recovery.img.zip -
+
+  # time dd bs=4M if=/dev/loop0p3 of=~/Downloads/recovery.img
+  # stat ~/Downloads/recovery.img
+  # time dd bs=4M if=/dev/loop0p3 | gzip > ~/Downloads/recovery.img.gz
+  # stat ~/Downloads/recovery.img.gz
+  # it seems like you can get a bit smaller with bzip, but its much slower
+  # time dd bs=4M if=/dev/loop0p3 | bzip2 --best > ~/Downloads/recovery.img.best.bz2
+  # stat ~/Downloads/recovery.img.best.bz2
+  # time dd bs=4M if=/dev/loop0p3 | bzip2 --fast > ~/Downloads/recovery.img.fast.bz2
+  # stat ~/Downloads/recovery.img.fast.bz2
+  # time dd bs=4M if=/dev/loop0p3 | bzip2 --small > ~/Downloads/recovery.img.small.bz2
+  # stat ~/Downloads/recovery.img.small.bz2
+  # time dd bs=4M if=/dev/loop0p3 | zip ~/Downloads/recovery.img.zip -
+  # stat ~/Downloads/recovery.img.zip
+
+  # | gzip > /media/disk/sda2-backup-10august09.gz
+  #  | bzip2 --best > /media/disk/$(date +%Y%m%d_%H%M%S)_sda2-backup.bz2
+
+
+
+  pr_header "recovery image..."
+  pr_ok "recovery image is ${IMG_RESTORE}"
+
+}
+
+
+function cleanup()
+{
+  pr_header "don't need partitions anymore unmount"
+  sudo umount -f -d mnt/restore_boot
+  sudo umount -f -d mnt/restore_rootfs
+  sudo umount -f -d mnt/restore_recovery
+
+  pr_header "detach loop devices"
+  sudo losetup --detach-all
 }
 
 # get current source dir, even if its hidden in links
@@ -285,3 +443,4 @@ source ${DIR}/display_funcs
 
 main
 
+cleanup
