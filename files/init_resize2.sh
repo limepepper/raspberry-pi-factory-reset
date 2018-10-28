@@ -75,7 +75,7 @@ fix_partuuid() {
 main () {
 
 
-cat << 'EOF'
+cat << 'EOF' | logger
 ##    _____          _
 ##   |  ___|_ _  ___| |_ ___  _ __ _   _
 ##   | |_ / _` |/ __| __/ _ \| '__| | | |
@@ -90,7 +90,12 @@ cat << 'EOF'
 ##                                         |___/
 EOF
 
-  dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
+  # dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
+  unzip -p /opt/recovery.img.zip \
+        | dd bs=4M \
+          of=/dev/mmcblk0p3 \
+          conv=fsync \
+          status=progress
 
   cp -f /boot/cmdline.txt_original /boot/cmdline.txt
   touch /boot/ssh
