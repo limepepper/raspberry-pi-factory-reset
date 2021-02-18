@@ -1,8 +1,9 @@
 Raspberry Pi factory reset utility
 =========
 
-This script modifies a raspbian image to add a `factory_reset` command, which
-can be used in a running system to reset it back to pristie state.
+This script modifies a raspbian image to add a restore partition and a
+`factory_reset` command, which can be used in a running system to reset it back
+to a fresh installation.
 
 For example you could do the following (over ssh if required):
 
@@ -23,21 +24,6 @@ sets up the restored raspbian so ssh is running and available.
 
 Background
 -----
-
-These days, almost all my installations are done using ansible and tested using
-test-kitchen or molecule, however these tools assume that you can easily start
-from a fresh OS build to run end-to-end integration tests. Recreation of base
-installation is made difficult with raspberry pi is having to restore sdcards
-when I want fresh Pi.
-
-Obviously virtualization/containerization makes this easy for x86_64 systems.
-But raspberry pis are on the Arm architecture, and emulating this on an x86_64
-based linux desktop is not that straightforward. So an alternative solution is
-to create a restore partition which can be used factory reset the Pi back to its
-original state. We can then use this as the provisioner during setup in molecule
-or test-kitchen.
-
-**Or it can just be used to reset the pi when you have messed it up!!**
 
 A typical raspbian image contains 2 partitions, one with the boot partition
 and the other with the root partition containing the OS. Upon first booting,
@@ -78,6 +64,8 @@ are not tested.
 
 Dependencies
 ------------
+
+Running the script requires local sudo to mount stuff
 
 This script was developed on a linux desktop with packages installed for working
 with disk images, archives and filesystems. The command lines tools I used are
