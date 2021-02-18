@@ -2,7 +2,9 @@ Raspberry Pi factory reset utility
 =========
 
 This script modifies a raspbian image to add a `factory_reset` command, which
-can be used in a running system to reset it back to pristie state. For example:
+can be used in a running system to reset it back to pristie state.
+
+For example you could do the following (over ssh if required):
 
     root@raspberrypi:~# /boot/factory_reset --reset
     factory restore script
@@ -11,11 +13,13 @@ can be used in a running system to reset it back to pristie state. For example:
     Connection to raspberrypi.local closed by remote host.
     Connection to raspberrypi.local closed.
 
-The pi will then reboot back to a fresh installation of Raspbian.
+The Pi will restore to a fresh installation:
 
-There is some more information about the process in these blog posts:
-http://limepepper.co.uk/raspberry-pi/2018/04/15/Remote-factory-reset-for-raspberry-pi-1.html
-http://limepepper.co.uk/raspberry-pi/2018/04/16/Remote-factory-reset-for-raspberry-pi-2.html
+![GitHub Logo](/assets/images/raspi-restore-screenshot_300px.png)
+
+The pi will then reboot back to a fresh installation of Raspbian. The script
+sets up the restored raspbian so ssh is running and available.
+
 
 Background
 -----
@@ -53,7 +57,7 @@ The script requires a locally available base image of raspbian in the same
 directory as the script.
 
 This script was tested with the series of images available here:
-https://downloads.raspberrypi.org/raspbian/images/
+https://downloads.raspberrypi.org/raspbian_lite/images/
 
 
 
@@ -106,4 +110,9 @@ http://www.binarycents.com/raspberry-pi/raspberry-pi-remote-reinstall/
 Some other sources of information:
 
 https://raspberrypi.stackexchange.com/questions/80070/remote-full-reset-re-install-of-a-raspberry
+
+There is some more information about the process in these blog posts:
+
+* https://limepepper.co.uk/raspberry-pi/2018/04/15/Remote-factory-reset-for-raspberry-pi-1.html
+* https://limepepper.co.uk/raspberry-pi/2018/04/16/Remote-factory-reset-for-raspberry-pi-2.html
 

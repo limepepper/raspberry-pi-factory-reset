@@ -4,9 +4,15 @@
 set -eu
 set -o pipefail
 
-# BASE=2018-03-13-raspbian-stretch-lite
-# BASE=2018-06-27-raspbian-stretch-lite
-BASE=2018-10-09-raspbian-stretch-lite
+# DEFAULT_BASE=2018-03-13-raspbian-stretch-lite
+# DEFAULT_BASE=2018-06-27-raspbian-stretch-lite
+DEFAULT_BASE=2018-10-09-raspbian-stretch-lite
+
+BASE=${1:-$DEFAULT_BASE}
+
+echo $BASE
+
+exit 99
 
 MOTD_SHOW_LIVE=""
 SET_PI_PASSWORD=""
