@@ -1,49 +1,109 @@
-Role Name
+Raspberry Pi factory reset utility
 =========
 
-A brief description of the role goes here.
+This script modifies a raspbian image to add a `factory_reset` command, which
+can be used in a running system to reset it back to pristie state. For example:
 
-Requirements
-------------
+    root@raspberrypi:~# /boot/factory_reset --reset
+    factory restore script
+    resetting
+    rebooting...
+    Connection to raspberrypi.local closed by remote host.
+    Connection to raspberrypi.local closed.
 
-Any pre-requisites that may not be covered by Ansible itself or the role should
-be mentioned here. For instance, if the role uses the EC2 module, it may be a
-good idea to mention in this section that the boto package is required.
+The pi will then reboot back to a fresh installation of Raspbian.
 
-Role Variables
---------------
+There is some more information about the process in these blog posts:
+http://limepepper.co.uk/raspberry-pi/2018/04/15/Remote-factory-reset-for-raspberry-pi-1.html
+http://limepepper.co.uk/raspberry-pi/2018/04/16/Remote-factory-reset-for-raspberry-pi-2.html
 
-A description of the settable variables for this role should go here, including
-any variables that are in defaults/main.yml, vars/main.yml, and any variables
-that can/should be set via parameters to the role. Any variables that are read
-from other roles and/or the global scope (ie. hostvars, group vars, etc.) should
-be mentioned here as well.
+Background
+-----
+
+These days, almost all my installations are done using ansible and tested using
+test-kitchen or molecule, however these tools assume that you can easily start
+from a fresh OS build to run end-to-end integration tests. Recreation of base
+installation is made difficult with raspberry pi is having to restore sdcards
+when I want fresh Pi.
+
+Obviously virtualization/containerization makes this easy for x86_64 systems.
+But raspberry pis are on the Arm architecture, and emulating this on an x86_64
+based linux desktop is not that straightforward. So an alternative solution is
+to create a restore partition which can be used factory reset the Pi back to its
+original state. We can then use this as the provisioner during setup in molecule
+or test-kitchen.
+
+**Or it can just be used to reset the pi when you have messed it up!!**
+
+A typical raspbian image contains 2 partitions, one with the boot partition
+and the other with the root partition containing the OS. Upon first booting,
+raspbian expands the root partition as to completely fill the available space
+in the sdcard.
+
+This script modifies the rasbian image file to add the following features:
+
+1. Adds a partition containing a pristine base installation
+2. adds a utility to the root partition to call factory-reset
+3. optionally reset the pi password on the restored OS
+
+Instructions
+--------
+
+The script requires a locally available base image of raspbian in the same
+directory as the script.
+
+This script was tested with the series of images available here:
+https://downloads.raspberrypi.org/raspbian/images/
+
+
+
+Future
+-----
+
+Raspberry pi seem to have stopped the sequence of releases [here](https://downloads.raspberrypi.org/raspbian/images/) and switched to calling it Raspberry Pi OS and providing downloads
+here:
+
+https://www.raspberrypi.org/software/operating-systems/#raspberry-pi-os-32-bit
+
+Assuming these images are similarly structured, they would work as well, but they
+are not tested.
+
+
+
+
 
 Dependencies
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in
-regards to parameters that may need to be set for other roles, or variables that
-are used from other roles.
+This script was developed on a linux desktop with packages installed for working
+with disk images, archives and filesystems. The command lines tools I used are
+available in the fedora/EPEL repos, and I assume are similarly available in
+Ubuntu and mainstream distros.
 
-Example Playbook
-----------------
+* zip
+* uuid
 
-Including an example of how to use your role (for instance, with variables
-passed in as parameters) is always nice for users too:
+Warning
+-------
 
-    - hosts: servers
-      roles:
-         - { role: limepepper.raspberrypi, x: 42 }
+Obviously factory resetting a device is a destructive process, so don't try this
+unless you understand what you are doing.
 
 License
 -------
 
-BSD
+The code is provided as is, and can be used/modified for any purpose, attribution
+is appreciated but not required.
 
-Author Information
-------------------
+Sources/References
+----
 
-An optional section for the role authors to include contact information, or a
-website (HTML is not allowed).
-# ansible-role-raspberrypi
+This project was inspired by a blog post on binarycents.com, but that site appears
+to be gone now:
+http://www.binarycents.com/raspberry-pi/raspberry-pi-remote-reinstall/
+
+
+Some other sources of information:
+
+https://raspberrypi.stackexchange.com/questions/80070/remote-full-reset-re-install-of-a-raspberry
+
