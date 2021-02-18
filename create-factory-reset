@@ -12,45 +12,69 @@ BASE=${1:-$DEFAULT_BASE}
 
 echo $BASE
 
-exit 99
 
 MOTD_SHOW_LIVE=""
 SET_PI_PASSWORD=""
+
+function check_prerequisites()
+{
+  pr_header "prerequisite checks"
+
+  cmds=(
+      uuidgen
+      zip
+      tune2fs
+      losetup
+      partprobe
+      blkid
+      e2label
+  )
+
+  for cmd in "${cmds[@]}"; do
+    if ! command -v ${cmd} > /dev/null; then
+      echo "need command \"${cmd}\" installed... exiting"
+      exit 99
+    fi
+  done
+
+
+}
 
 function main()
 {
 
   pr_header "entering main function"
 
-# paths for base, intermediate and restore images
-IMG_ORIG=${BASE}.img
-[ -f ${IMG_ORIG} ] || { echo "Not found source image '${IMG_ORIG}'" && exit;  }
+  # paths for base, intermediate and restore images
+  IMG_ORIG=${BASE}.img
+  [ -f ${IMG_ORIG} ] || { echo "Not found source image '${IMG_ORIG}'" && exit;  }
 
-IMG_RESTORE=${BASE}.restore.img
-IMG_LIVE=${BASE}.live.img
 
-# paths to src/dest file that is used for resetting in live image
-RECOVERY_SCRIPT_SOURCE="${DIR}/init_resize2.sh"
-[ -f ${RECOVERY_SCRIPT_SOURCE} ] || { echo "Not found ${RECOVERY_SCRIPT_SOURCE}" && exit;  }
-RECOVERY_SCRIPT_TARGET=/usr/lib/raspi-config/init_resize2.sh
+  IMG_RESTORE=${BASE}.restore.img
+  IMG_LIVE=${BASE}.live.img
 
-# because of cloning the images, need to generate new UUIDs
-UUID_RESTORE=$(uuidgen)
-UUID_ROOTFS=$(uuidgen)
+  # paths to src/dest file that is used for resetting in live image
+  RECOVERY_SCRIPT_SOURCE="${DIR}/init_resize2.sh"
+  [ -f ${RECOVERY_SCRIPT_SOURCE} ] || { echo "Not found ${RECOVERY_SCRIPT_SOURCE}" && exit;  }
+  RECOVERY_SCRIPT_TARGET=/usr/lib/raspi-config/init_resize2.sh
 
-# @TODO using the existing UUID_BOOT because it stays the same
-# UUID_BOOT=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null  | \
-#         dd bs=1 count=8 2>/dev/null)
+  # because of cloning the images, need to generate new UUIDs
+  UUID_RESTORE=$(uuidgen)
+  UUID_ROOTFS=$(uuidgen)
 
-# partuuid seems to get reset by resize.sh, however UUID doesn't seem to work
-set +o pipefail
-PARTUUID=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
-set -o pipefail
-[ ! -z ${PARTUUID} ] || { echo "PARTUUID is empty '${PARTUUID}'" && exit;  }
+  # @TODO using the existing UUID_BOOT because it stays the same
+  # UUID_BOOT=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null  | \
+  #         dd bs=1 count=8 2>/dev/null)
 
-pr_ok "PARTUUID generated is ${PARTUUID}"
+  # partuuid seems to get reset by resize.sh, however UUID doesn't seem to work
+  set +o pipefail
+  PARTUUID=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
+  set -o pipefail
+  [ ! -z ${PARTUUID} ] || { echo "PARTUUID is empty '${PARTUUID}'" && exit;  }
 
-pr_header "2.2 make a copy of the pristine image for use as the live rootfs"
+  pr_ok "PARTUUID generated is ${PARTUUID}"
+
+  pr_header "2.2 make a copy of the pristine image for use as the live rootfs"
 
 [[ -f "${IMG_LIVE}" ]] && \
 {
@@ -421,6 +445,8 @@ source "${DIR}/display_funcs"
 
 # if the script failed, cleanup previous run.
 # cleanup
+
+check_prerequisites
 
 main
 
