@@ -12,7 +12,27 @@ BASE=${1:-$DEFAULT_BASE}
 
 echo $BASE
 
-exit 99
+# get current source dir, even if its hidden in links
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+# paths for base, intermediate and restore images
+# this isn't touched
+IMG_ORIG=${BASE}.img
+[ -f ${IMG_ORIG} ] || { echo "Not found source image '${IMG_ORIG}'" && exit;  }
+
+# this is the ultimate output image that should be used for flashing
+IMG_RESTORE=${BASE}.restore.img
+IMG_LIVE=${BASE}.live.img
+
+# paths to script that is used for resetting in live image
+RECOVERY_SCRIPT_SOURCE="${DIR}/init_resize2.sh"
+[ -f ${RECOVERY_SCRIPT_SOURCE} ] || { echo "Not found ${RECOVERY_SCRIPT_SOURCE}" && exit;  }
 
 MOTD_SHOW_LIVE=""
 SET_PI_PASSWORD=""
@@ -22,50 +42,27 @@ function main()
 
   pr_header "entering main function"
 
-# paths for base, intermediate and restore images
-IMG_ORIG=${BASE}.img
-[ -f ${IMG_ORIG} ] || { echo "Not found source image '${IMG_ORIG}'" && exit;  }
+  # path (in live image, i.e. where to put the file for resizing
+  RECOVERY_SCRIPT_TARGET=/usr/lib/raspi-config/init_resize2.sh
 
-IMG_RESTORE=${BASE}.restore.img
-IMG_LIVE=${BASE}.live.img
+  pr_header "2.2 make a copy of the pristine image for use as the live rootfs"
 
-# paths to src/dest file that is used for resetting in live image
-RECOVERY_SCRIPT_SOURCE="${DIR}/init_resize2.sh"
-[ -f ${RECOVERY_SCRIPT_SOURCE} ] || { echo "Not found ${RECOVERY_SCRIPT_SOURCE}" && exit;  }
-RECOVERY_SCRIPT_TARGET=/usr/lib/raspi-config/init_resize2.sh
+  [[ -f "${IMG_LIVE}" ]] && \
+  {
+    pr_warn "live file ${IMG_LIVE} already, exists - overwriting"
+    cp -f ${IMG_ORIG} ${IMG_LIVE}
+    pr_ok "${IMG_LIVE} created"
+  } || \
+  {
+    cp -f ${IMG_ORIG} ${IMG_LIVE}
+    pr_ok "${IMG_LIVE} created"
+  }
 
-# because of cloning the images, need to generate new UUIDs
-UUID_RESTORE=$(uuidgen)
-UUID_ROOTFS=$(uuidgen)
-
-# @TODO using the existing UUID_BOOT because it stays the same
-# UUID_BOOT=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null  | \
-#         dd bs=1 count=8 2>/dev/null)
-
-# partuuid seems to get reset by resize.sh, however UUID doesn't seem to work
-set +o pipefail
-PARTUUID=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
-set -o pipefail
-[ ! -z ${PARTUUID} ] || { echo "PARTUUID is empty '${PARTUUID}'" && exit;  }
-
-pr_ok "PARTUUID generated is ${PARTUUID}"
-
-pr_header "2.2 make a copy of the pristine image for use as the live rootfs"
-
-[[ -f "${IMG_LIVE}" ]] && \
-{
-  pr_warn "live file ${IMG_LIVE} already, exists - overwriting"
-  cp -f ${IMG_ORIG} ${IMG_LIVE}
-  pr_ok "${IMG_LIVE} created"
-} || \
-{
-  cp -f ${IMG_ORIG} ${IMG_LIVE}
-  pr_ok "${IMG_LIVE} created"
-}
+# exit 99
 
 pr_header "2.3 create an img file for boot, recovery, and rootfs filesystems"
 
-PT_ORIG="$(sfdisk -d ${IMG_ORIG})"
+PT_ORIG="$(sfdisk --dump ${IMG_ORIG})"
 
 #get the device name for use in the greps
 PTABLE_DEVICE=$(echo "${PT_ORIG}" | egrep '^device: ' | cut -d' ' -f2)
@@ -93,10 +90,13 @@ P2_NEWSIZE_BYTES=2147483648
 # how many sectors is that?
 # P2_SECTORS=$(( ${P2_NEWSIZE_BYTES} / 512 ))
 P2_SECTORS=${PTABLE_P2_SIZE}
+
 echo "P2 sectors is ${P2_SECTORS}"
 
-P2_END=$(( PTABLE_P2_START + ${P2_SECTORS} ))
+P2_END=$(( ( PTABLE_P2_START + P2_SECTORS ) - 1 ))
 echo "P2_END is ${P2_END}"
+
+exit 99
 
 # use the sector at the end of P2, find how many bytes that is
 # start P3 at the next 8192 boundary after that
@@ -106,10 +106,10 @@ PTABLE_P3_START=$(( ((((( P2_END * 512 ) / 8192) + 1) * 8192)/512) ))
 [[ -f "${IMG_RESTORE}" ]] && \
 {
   pr_warn "restore file ${IMG_RESTORE} already, exists - overwriting"
-  dd if=/dev/zero bs=4M count=2000 > ${IMG_RESTORE}
+  dd if=/dev/zero bs=4M count=2048 > ${IMG_RESTORE}
 } || \
 {
-  dd if=/dev/zero bs=4M count=2000 > ${IMG_RESTORE}
+  dd if=/dev/zero bs=4M count=2048 > ${IMG_RESTORE}
   # touch ${IMG_RESTORE}
 }
 
@@ -121,7 +121,16 @@ pr_warn "making partition table..."
 
 #${IMG_RESTORE}2 : start=${PTABLE_P2_START}, size=${P2_SECTORS}, type=83
 
-sfdisk ${IMG_RESTORE} <<EOL
+  # partuuid seems to get reset by resize.sh, however UUID doesn't seem to work
+  set +o pipefail
+  PARTUUID=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
+  set -o pipefail
+
+  [ ! -z ${PARTUUID} ] || { echo "PARTUUID is empty '${PARTUUID}'" && exit;  }
+
+  pr_ok "PARTUUID generated is ${PARTUUID}"
+
+cat << EOF > /tmp/yourfilehere
 label: dos
 label-id: 0x${PARTUUID}
 unit: sectors
@@ -130,7 +139,9 @@ ${IMG_RESTORE}1 : start=${PTABLE_P1_START}, size=${PTABLE_P1_SIZE}, type=c
 ${IMG_RESTORE}2 : start=${PTABLE_P2_START}, size=${P2_SECTORS}, type=83
 ${IMG_RESTORE}3 : start=${PTABLE_P3_START}, size=${PTABLE_P2_SIZE}, type=83
 
-EOL
+EOF
+
+sfdisk ${IMG_RESTORE} < /tmp/yourfilehere
 
 pr_header "2.6 Verify that the new filesystem structure"
 fdisk -lu ${IMG_RESTORE}
@@ -190,55 +201,64 @@ pr_warn "UUID_BOOT is ${UUID_BOOT}"
   pr_warn "UUID_BOOT is ${UUID_BOOT}"
 }
 
-pr_header "3.6 call tunefs to set label and UUID"
-sudo tune2fs ${LOOP_RESTORE}p2 -U ${UUID_RESTORE}
-sudo e2label ${LOOP_RESTORE}p2 recoveryfs
-sudo tune2fs ${LOOP_RESTORE}p3 -U ${UUID_ROOTFS}
+  # because of cloning the images, need to generate new UUIDs
+  UUID_RESTORE=$(uuidgen)
+  UUID_ROOTFS=$(uuidgen)
 
-pr_header "3.7 call partprobe"
-sudo partprobe ${LOOP_RESTORE}
+  # @TODO using the existing UUID_BOOT because it stays the same
+  # UUID_BOOT=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null  | \
+  #         dd bs=1 count=8 2>/dev/null)
 
-pr_header "3.8 resize the fs on the recovery partition to fit the restore img"
-sudo e2fsck -f ${LOOP_RESTORE}p2
-sudo resize2fs ${LOOP_RESTORE}p2
+  pr_header "3.6 call tunefs to set label and UUID"
+  sudo tune2fs ${LOOP_RESTORE}p2 -U ${UUID_RESTORE}
+  sudo e2label ${LOOP_RESTORE}p2 recoveryfs
+  sudo tune2fs ${LOOP_RESTORE}p3 -U ${UUID_ROOTFS}
 
-sudo fdisk -lu ${LOOP_RESTORE}
+  pr_header "3.7 call partprobe"
+  sudo partprobe ${LOOP_RESTORE}
 
-mkdir -p mnt/restore_boot
-mkdir -p mnt/restore_recovery
-mkdir -p mnt/restore_rootfs
+  pr_header "3.8 resize the fs on the recovery partition to fit the restore img"
+  sudo e2fsck -f ${LOOP_RESTORE}p2
+  sudo resize2fs ${LOOP_RESTORE}p2
 
-sudo mount ${LOOP_RESTORE}p1 mnt/restore_boot
-sudo mount ${LOOP_RESTORE}p2 mnt/restore_recovery
-sudo mount ${LOOP_RESTORE}p3 mnt/restore_rootfs
+  sudo fdisk -l ${LOOP_RESTORE}
 
-pr_header "4.0 current boot cmdline.txt"
-cat mnt/restore_boot/cmdline.txt
+  mkdir -p mnt/restore_boot
+  mkdir -p mnt/restore_recovery
+  mkdir -p mnt/restore_rootfs
+
+  sudo mount ${LOOP_RESTORE}p1 mnt/restore_boot
+  sudo mount ${LOOP_RESTORE}p2 mnt/restore_recovery
+  sudo mount ${LOOP_RESTORE}p3 mnt/restore_rootfs
+
+  pr_header "4.0 current boot cmdline.txt"
+  cat mnt/restore_boot/cmdline.txt
 
 pr_header "4.1 create the boot from live rootfs cmdline.txt"
 sudo tee mnt/restore_boot/cmdline.txt << EOF
 dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=PARTUUID=${PARTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=/usr/lib/raspi-config/init_resize.sh
 EOF
 
-## this not working, as it gets over written
-pr_header "4.2 backup original cmdline.txt"
-[[ -f mnt/restore_boot/cmdline.txt_original ]] && \
-{
-  pr_warn "original already  existing, over writing...."
-  sudo cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
-  pr_ok "copied to original"
-} || \
-{
-  sudo cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
-  # ls mnt/restore_boot/cmdline.txt_original
-  # cat mnt/restore_boot/cmdline.txt_original
-  pr_ok "copied to original"
-}
+  ## this not working, as it gets over written
+  pr_header "4.2 backup original cmdline.txt"
+  [[ -f mnt/restore_boot/cmdline.txt_original ]] && \
+  {
+    pr_warn "original already  existing, over writing...."
+    sudo cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
+    pr_ok "copied to original"
+  } || \
+  {
+    sudo cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_original
+    # ls mnt/restore_boot/cmdline.txt_original
+    # cat mnt/restore_boot/cmdline.txt_original
+    pr_ok "copied to original"
+  }
 
 pr_header "4.3 create alt cmd file for recovery boot"
 sudo tee mnt/restore_boot/cmdline.txt_recovery << EOF
 dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=PARTUUID=XXXYYYXXX rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=${RECOVERY_SCRIPT_TARGET}
 EOF
+
 ## not working;
 # init=/boot/factory_reset_restore
 
@@ -385,13 +405,37 @@ pr_header "change the pi user password"
   pr_header "copy the recovery image to the recovery /opt dir for restoring"
 
   # dd if=${LOOP_RESTORE}p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
-  sudo dd bs=4M if=${LOOP_RESTORE}p3 | sudo zip mnt/restore_recovery/opt/recovery.img.zip -
+  sudo dd bs=4M if=${LOOP_RESTORE}p3 of=recovery.img
+
+  # | sudo zip mnt/restore_recovery/opt/recovery.img.zip -
 
 
 
   pr_header "recovery image..."
   pr_ok "recovery image is ${IMG_RESTORE}"
 
+}
+
+function check_prerequisites()
+{
+  pr_header "prerequisite checks"
+
+  cmds=(
+      uuidgen
+      zip
+      tune2fs
+      losetup
+      partprobe
+      blkid
+      e2label
+  )
+
+  for cmd in "${cmds[@]}"; do
+    if ! command -v ${cmd} > /dev/null; then
+      echo "need command \"${cmd}\" installed... exiting"
+      exit 99
+    fi
+  done
 }
 
 
@@ -404,24 +448,57 @@ function cleanup()
   sudo umount -f -d mnt/restore_recovery || true
 
   pr_header "detach loop devices"
-  sudo losetup --detach-all
+  sudo losetup --detach ${LOOP_LIVE}
+  sudo losetup --detach ${LOOP_RESTORE}
 
 }
 
-# get current source dir, even if its hidden in links
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
-  SOURCE="$(readlink "$SOURCE")"
-  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-done
-DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+usage()
+{
+cat << EOF
+usage: $0 options
+This script run the test1 or test2 over a machine.
+OPTIONS:
+   -h      Show this message
+   -i      source image, from downloads.raspberrypi.org
+   -m      debug sub function
+   -v      Verbose
+EOF
+}
 
 source "${DIR}/display_funcs"
 
 # if the script failed, cleanup previous run.
 # cleanup
 
-main
+while getopts “ht:r:p:v” OPTION
+do
+     case $OPTION in
+         h)
+             usage
+             exit 1
+             ;;
+         t)
+             TEST=$OPTARG
+             ;;
+         r)
+             SERVER=$OPTARG
+             ;;
+         p)
+             PASSWD=$OPTARG
+             ;;
+         v)
+             VERBOSE=1
+             ;;
+         ?)
+             usage
+             exit
+             ;;
+     esac
+done
 
-cleanup
+if [[ -z $TEST ]] || [[ -z $SERVER ]] || [[ -z $PASSWD ]]
+then
+     usage
+     exit 1
+fi

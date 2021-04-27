@@ -5,7 +5,10 @@ This script modifies a raspbian image to add a restore partition and a
 `factory_reset` command, which can be used in a running system to reset it back
 to a fresh installation.
 
-For example you could do the following (over ssh if required):
+Its mostly useful for testing automated deployments of software to raspberry pi
+and will delete any data off the root partition during restoration.
+
+For example you could do the following (over ssh):
 
     root@raspberrypi:~# /boot/factory_reset --reset
     factory restore script
@@ -32,9 +35,17 @@ in the sdcard.
 
 This script modifies the rasbian image file to add the following features:
 
-1. Adds a partition containing a pristine base installation
-2. adds a utility to the root partition to call factory-reset
+1. Adds a partition used for recovery containing a pristine copy of Pi OS
+2. adds a utility to the root partition to call a factory-reset
 3. optionally reset the pi password on the restored OS
+
+Usage
+-----
+
+In general just use one of the Pi OS images available in the releases section:
+https://github.com/limepepper/raspberry-pi-factory-reset/releases
+
+download the image, unzip it, and flash it to your rPi as normal.
 
 Instructions
 --------
@@ -44,6 +55,14 @@ directory as the script.
 
 This script was tested with the series of images available here:
 https://downloads.raspberrypi.org/raspbian_lite/images/
+
+
+    sudo dd bs=4M \
+        if=2021-01-11-raspios-buster-armhf-lite.restore.img \
+        of=/dev/sdXXXX \
+        conv=fsync \
+        status=progress
+
 
 
 

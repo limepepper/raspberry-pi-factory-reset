@@ -75,7 +75,7 @@ fix_partuuid() {
 main () {
 
 
-cat << 'EOF' | logger
+cat << 'EOF' | tee logger
 ##    _____          _
 ##   |  ___|_ _  ___| |_ ___  _ __ _   _
 ##   | |_ / _` |/ __| __/ _ \| '__| | | |
@@ -90,15 +90,71 @@ cat << 'EOF' | logger
 ##                                         |___/
 EOF
 
+  echo "show blkid"
+  blkid
+  echo ""
+
   # dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
-  unzip -p /opt/recovery.img.zip \
-        | dd bs=4M \
+  unzip -p /opt/recovery.img.zip | \
+          dd bs=4M \
           of=/dev/mmcblk0p3 \
           conv=fsync \
           status=progress
 
-  cp -f /boot/cmdline.txt_original /boot/cmdline.txt
+  sleep 1
+
+  echo "partprobing"
+  partprobe
+  echo ""
+
+  echo "sync"
+  sync
+  echo ""
+
+  printf '\e[?5h'  # Turn on reverse video
+  sleep 1
+  printf '\e[?5l'  # Turn on normal video
+
+  echo "show filesystem size"
+  df -h
+
+  sleep 10
+
+  PTUUID=$(blkid -p -s PTUUID -o value /dev/mmcblk0)
+
+  P1_UUID="$(blkid -p -o value -s UUID /dev/mmcblk0p1)"
+  P3_UUID="$(blkid -p -o value -s UUID /dev/mmcblk0p3)"
+
+  echo "PTUUID is ${PTUUID}"
+
+  mkdir -p /mnt/rootfs
+  mount /dev/mmcblk0p3 /mnt/rootfs
+
+  echo "show blkid for /dev/mmcblk0p3"
+  blkid -o export /dev/mmcblk0p3
+  echo "show blkid for /dev/mmcblk0p3 -p"
+  blkid -p -o export /dev/mmcblk0p3
+
+tee /boot/cmdline.txt << EOF
+console=serial0,115200 console=tty1 root=PARTUUID=${PTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet init=/usr/lib/raspi-config/init_resize.sh
+EOF
+
+tee /mnt/rootfs/etc/fstab << EOF
+proc            /proc           proc    defaults          0       0
+UUID=${P1_UUID}  /boot           vfat    defaults          0       2
+UUID=${P3_UUID}  /               ext4    defaults,noatime  0       1
+# a swapfile is not a swap partition, no line here
+#   use  dphys-swapfile swap[on|off]  for that
+EOF
+
   touch /boot/ssh
+
+  echo "show filesystem size"
+  df -h
+  # give time to read the previous message
+  sleep 10
+
+  umount /mnt/rootfs
 
   return 0
 }
