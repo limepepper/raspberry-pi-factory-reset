@@ -109,13 +109,13 @@ EOF
   partprobe
   echo ""
 
+  echo "sync"
+  sync
+  echo ""
+
   printf '\e[?5h'  # Turn on reverse video
   sleep 1
   printf '\e[?5l'  # Turn on normal video
-
-  # this didn't seem to be populated...
-  echo "disk by label contents"
-  ls /dev/disk/by-label
 
   echo "show filesystem size"
   df -h
@@ -123,6 +123,9 @@ EOF
   sleep 10
 
   PTUUID=$(blkid -p -s PTUUID -o value /dev/mmcblk0)
+
+  P1_UUID="$(blkid -p -o value -s UUID /dev/mmcblk0p1)"
+  P3_UUID="$(blkid -p -o value -s UUID /dev/mmcblk0p3)"
 
   echo "PTUUID is ${PTUUID}"
 
@@ -141,13 +144,13 @@ EOF
   blkid -p -o export /dev/mmcblk0p3
 
 tee /boot/cmdline.txt << EOF
-console=serial0,115200 console=tty1 root=PARTUUID=${PTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=/usr/lib/raspi-config/init_resize.sh
+console=serial0,115200 console=tty1 root=PARTUUID=${PTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet init=/usr/lib/raspi-config/init_resize.sh
 EOF
 
 tee /mnt/rootfs/etc/fstab << EOF
 proc            /proc           proc    defaults          0       0
-PARTUUID=${PTUUID}-01  /boot           vfat    defaults          0       2
-PARTUUID=${PTUUID}-03  /               ext4    defaults,noatime  0       1
+UUID=${P1_UUID}  /boot           vfat    defaults          0       2
+UUID=${P3_UUID}  /               ext4    defaults,noatime  0       1
 # a swapfile is not a swap partition, no line here
 #   use  dphys-swapfile swap[on|off]  for that
 EOF
@@ -175,6 +178,12 @@ EOF
   echo "rootf fstab"
   cat /mnt/rootfs/etc/fstab
   echo ""
+
+  echo "show filesystem size"
+  df -h
+
+  # cat /mnt/rootfs/usr/lib/raspi-config/init_resize.sh
+  ls -lah /mnt/rootfs/usr/lib/raspi-config/init_resize.sh
 
   umount -f /mnt/rootfs
 

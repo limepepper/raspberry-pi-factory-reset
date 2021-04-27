@@ -1,5 +1,18 @@
 #!/bin/sh
 
+cat << 'EOF' | tee logger
+##                _     _
+##  _ __ ___  ___(_)___(_)_ __   __ _
+## | '__/ _ \/ __| |_  / | '_ \ / _` |
+## | | |  __/\__ \ |/ /| | | | | (_| |
+## |_|  \___||___/_/___|_|_| |_|\__, |
+##                              |___/
+EOF
+
+sleep 5
+
+
+
 reboot_pi () {
   umount /boot
   mount / -o remount,ro
@@ -75,8 +88,24 @@ get_variables () {
 }
 
 fix_partuuid() {
+
+
+
+echo "got here13"
+sleep 5
+
   mount -o remount,rw "$ROOT_PART_DEV"
+
+
+echo "got here14"
+sleep 5
+
   mount -o remount,rw "$BOOT_PART_DEV"
+
+
+echo "got here15"
+sleep 5
+
   DISKID="$(tr -dc 'a-f0-9' < /dev/hwrng | dd bs=1 count=8 2>/dev/null)"
   fdisk "$ROOT_DEV" > /dev/null <<EOF
 x
@@ -90,6 +119,10 @@ EOF
     sed -i "s/${OLD_DISKID}/${DISKID}/" /boot/cmdline.txt
     sync
   fi
+
+
+echo "got here16"
+sleep 5
 
   mount -o remount,ro "$ROOT_PART_DEV"
   mount -o remount,ro "$BOOT_PART_DEV"
@@ -139,6 +172,8 @@ check_kernel () {
 }
 
 main () {
+
+
   get_variables
 
   if ! check_variables; then
@@ -155,9 +190,20 @@ main () {
     fi
   fi
 
+
+echo "got here8"
+sleep 5
+
   if [ "$ROOT_PART_END" -eq "$TARGET_END" ]; then
+
+  echo "ROOT_PART_END=${ROOT_PART_END}   TARGET_END=${TARGET_END}  "
+  sleep 20
     reboot_pi
   fi
+
+
+echo "got here9"
+sleep 5
 
   if [ "$NOOBS" = "1" ]; then
     if ! parted -m "$ROOT_DEV" u s resizepart "$EXT_PART_NUM" yes "$TARGET_END"; then
@@ -166,12 +212,25 @@ main () {
     fi
   fi
 
+
+echo "got here10"
+sleep 5
+
   if ! parted -m "$ROOT_DEV" u s resizepart "$ROOT_PART_NUM" "$TARGET_END"; then
     FAIL_REASON="Root partition resize failed"
     return 1
   fi
 
+
+echo "got here11"
+sleep 5
+
   fix_partuuid
+
+
+
+echo "got here12"
+sleep 5
 
   return 0
 }
@@ -181,25 +240,37 @@ mount -t sysfs sys /sys
 mount -t tmpfs tmp /run
 mkdir -p /run/systemd
 
+sleep 10
+
 mount /boot
 mount / -o remount,ro
 
 sed -i 's| init=/usr/lib/raspi-config/init_resize\.sh||' /boot/cmdline.txt
 sed -i 's| sdhci\.debug_quirks2=4||' /boot/cmdline.txt
 
+echo "got here"
+
+sleep 5
+
 if ! grep -q splash /boot/cmdline.txt; then
   sed -i "s/ quiet//g" /boot/cmdline.txt
 fi
+
+
 mount /boot -o remount,ro
+
+
 sync
 
 echo 1 > /proc/sys/kernel/sysrq
+
 
 if ! check_commands; then
   echo "check commands failed"
   sleep 10
   reboot_pi
 fi
+
 
 if main; then
   whiptail --infobox "Resized root filesystem. Rebooting in 5 seconds..." 20 60

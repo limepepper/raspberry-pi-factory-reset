@@ -285,6 +285,9 @@ EOF
 function fix_resize_script(){
 
   sudo cp "${RESIZE_SCRIPT_SOURCE}" "mnt/restore_rootfs${RESIZE_SCRIPT_TARGET}"
+  sudo chmod +x "mnt/restore_rootfs${RESIZE_SCRIPT_TARGET}"
+
+  sync
 
 }
 
@@ -414,6 +417,8 @@ UUID=${UUID_RESTORE}    /      ext4    defaults,noatime  0       1
 EOF
 
 pr_header "copy the recovery image to the recovery /opt dir for restoring"
+
+sync
 
 #sudo dd if=${LOOP_RESTORE}p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
 sudo dd bs=4M if=${LOOP_RESTORE}p3 of=recovery.img
