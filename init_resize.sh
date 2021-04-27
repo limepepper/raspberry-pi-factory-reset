@@ -89,22 +89,8 @@ get_variables () {
 
 fix_partuuid() {
 
-
-
-echo "got here13"
-sleep 5
-
   mount -o remount,rw "$ROOT_PART_DEV"
-
-
-echo "got here14"
-sleep 5
-
   mount -o remount,rw "$BOOT_PART_DEV"
-
-
-echo "got here15"
-sleep 5
 
   DISKID="$(tr -dc 'a-f0-9' < /dev/hwrng | dd bs=1 count=8 2>/dev/null)"
   fdisk "$ROOT_DEV" > /dev/null <<EOF
@@ -119,10 +105,6 @@ EOF
     sed -i "s/${OLD_DISKID}/${DISKID}/" /boot/cmdline.txt
     sync
   fi
-
-
-echo "got here16"
-sleep 5
 
   mount -o remount,ro "$ROOT_PART_DEV"
   mount -o remount,ro "$BOOT_PART_DEV"
@@ -190,20 +172,12 @@ main () {
     fi
   fi
 
-
-echo "got here8"
-sleep 5
-
   if [ "$ROOT_PART_END" -eq "$TARGET_END" ]; then
 
   echo "ROOT_PART_END=${ROOT_PART_END}   TARGET_END=${TARGET_END}  "
   sleep 20
     reboot_pi
   fi
-
-
-echo "got here9"
-sleep 5
 
   if [ "$NOOBS" = "1" ]; then
     if ! parted -m "$ROOT_DEV" u s resizepart "$EXT_PART_NUM" yes "$TARGET_END"; then
@@ -212,25 +186,12 @@ sleep 5
     fi
   fi
 
-
-echo "got here10"
-sleep 5
-
   if ! parted -m "$ROOT_DEV" u s resizepart "$ROOT_PART_NUM" "$TARGET_END"; then
     FAIL_REASON="Root partition resize failed"
     return 1
   fi
 
-
-echo "got here11"
-sleep 5
-
   fix_partuuid
-
-
-
-echo "got here12"
-sleep 5
 
   return 0
 }
@@ -240,17 +201,11 @@ mount -t sysfs sys /sys
 mount -t tmpfs tmp /run
 mkdir -p /run/systemd
 
-sleep 10
-
 mount /boot
 mount / -o remount,ro
 
 sed -i 's| init=/usr/lib/raspi-config/init_resize\.sh||' /boot/cmdline.txt
 sed -i 's| sdhci\.debug_quirks2=4||' /boot/cmdline.txt
-
-echo "got here"
-
-sleep 5
 
 if ! grep -q splash /boot/cmdline.txt; then
   sed -i "s/ quiet//g" /boot/cmdline.txt
@@ -281,6 +236,7 @@ else
   sleep 10
 fi
 
+# flash screen before rebooting
 printf '\e[?5h'  # Turn on reverse video
 sleep 1
 printf '\e[?5l'  # Turn on normal video
