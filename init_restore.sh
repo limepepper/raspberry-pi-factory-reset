@@ -94,8 +94,6 @@ EOF
   blkid
   echo ""
 
-  sleep 10
-
   # dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
   unzip -p /opt/recovery.img.zip | \
           dd bs=4M \
@@ -103,7 +101,7 @@ EOF
           conv=fsync \
           status=progress
 
-  sleep 10
+  sleep 1
 
   echo "partprobing"
   partprobe
@@ -132,12 +130,6 @@ EOF
   mkdir -p /mnt/rootfs
   mount /dev/mmcblk0p3 /mnt/rootfs
 
-  sleep 10
-
-  echo "show blkid"
-  blkid
-  echo ""
-
   echo "show blkid for /dev/mmcblk0p3"
   blkid -o export /dev/mmcblk0p3
   echo "show blkid for /dev/mmcblk0p3 -p"
@@ -157,37 +149,12 @@ EOF
 
   touch /boot/ssh
 
-  echo "show mount"
-  mount
-  echo ""
-
-  echo "show recoveryfs fstab"
-  cat /etc/fstab
-  echo ""
-
-  echo "show cmdline"
-  cat /boot/cmdline.txt
-  echo ""
-
-  echo "show rootfs fstab"
-
-  echo "recovery fstab"
-  cat /etc/fstab
-  echo ""
-
-  echo "rootf fstab"
-  cat /mnt/rootfs/etc/fstab
-  echo ""
-
   echo "show filesystem size"
   df -h
-
-  # cat /mnt/rootfs/usr/lib/raspi-config/init_resize.sh
-  ls -lah /mnt/rootfs/usr/lib/raspi-config/init_resize.sh
-
-  umount -f /mnt/rootfs
-
+  # give time to read the previous message
   sleep 10
+
+  umount /mnt/rootfs
 
   return 0
 }

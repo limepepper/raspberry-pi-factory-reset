@@ -17,13 +17,14 @@ OPTIONS:
    -c     cleanup and exit. requires -i (or will cleaup default image)
           removes intermediate img files, unmounts loopbacks
           and any mounted img file filesystems
+   -e     cleaup at end. generally you want this
    -v      Verbose
 EOF
 }
 
 DO_CLEANUP_PRE=""
 DO_CLEANUP_POST=""
-# OPTION_BASE=""
+OPTION_BASE=""
 
 while getopts “hcei:p:v” OPTION
 do
@@ -57,12 +58,13 @@ shift $((OPTIND-1))
 
 source ./display_funcs
 source ./setup.sh
-validate_init
-
-echo $DO_CLEANUP_POST
-echo $DO_CLEANUP_PRE
+source ./utils.sh
 
 check_prerequisites
+check_sources
+
+echo "OPTION_BASE is ${OPTION_BASE}"
+echo "BASE is $BASE"
 
 if [ ! -z "${DO_CLEANUP_PRE}" ]; then
   cleanup_pre
