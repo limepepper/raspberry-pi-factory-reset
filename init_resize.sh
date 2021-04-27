@@ -121,7 +121,7 @@ check_variables () {
   fi
 
   if [ "$BOOT_DEV_NAME" != "$ROOT_DEV_NAME" ]; then
-      FAIL_REASON="Boot and root partitions are on different devices"
+      FAIL_REASON="Boot and root partitions are on different devices\nBOOT_DEV_NAME=$BOOT_DEV_NAME\nROOT_DEV_NAME=${ROOT_DEV_NAME}"
       return 1
   fi
 

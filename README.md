@@ -5,6 +5,9 @@ This script modifies a raspbian image to add a restore partition and a
 `factory_reset` command, which can be used in a running system to reset it back
 to a fresh installation.
 
+Download an image from the [releases](https://github.com/limepepper/raspberry-pi-factory-reset/releases) section and flash it to an sdcard. You generally want at least 32GB card, but you might
+be able to get away with 16GB.
+
 Its mostly useful for testing automated deployments of software to raspberry pi
 and will delete any data off the root partition during restoration.
 
@@ -47,14 +50,41 @@ https://github.com/limepepper/raspberry-pi-factory-reset/releases
 
 download the image, unzip it, and flash it to your rPi as normal.
 
-Instructions
+Build Prerequisites
+-------
+
+fedora
+
+    sudo dnf install zip e2fsprogs
+
+debian/ubuntu
+
+    sudo apt-get install uuid-runtime zip
+
+(and any other packages providing tools for your distro...) This has only been
+tested on fedora 33
+
+Build Instructions
 --------
 
 The script requires a locally available base image of raspbian in the same
-directory as the script.
+directory as the script. For example:
+
+    $ ls
+    2021-03-04-raspios-buster-armhf-lite.img
+    main.sh
 
 This script was tested with the series of images available here:
 https://downloads.raspberrypi.org/raspbian_lite/images/
+
+
+Run the script like so;
+
+    bash  ./main.sh -c -e -i 2021-03-04-raspios-buster-armhf-lite.img
+
+script will ask for sudo password when required
+
+To write the image to sdcard on linux, use something like this...
 
 
     sudo dd bs=4M \

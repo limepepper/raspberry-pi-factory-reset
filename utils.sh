@@ -241,7 +241,7 @@ function copy_live_to_restore(){
 
   sudo tune2fs ${LOOP_RESTORE}p2 -U ${UUID_RESTORE}
   sudo e2label ${LOOP_RESTORE}p2 recoveryfs
-++
+
   sudo tune2fs ${LOOP_RESTORE}p3 -U ${UUID_ROOTFS}
 
   pr_header "3.7 call partprobe"
@@ -434,27 +434,7 @@ sudo cp recovery.img.zip mnt/restore_recovery/opt/recovery.img.zip
 }
 
 
-function make_live(){
-
-
-  pr_header "indicate this it is the live shell"
-  [  -z "$MOTD_SHOW_LIVE" ] && \
-  {
-    echo "not editing live message"
-
-  } || \
-  {
-
-sudo tee mnt/restore_rootfs/etc/motd << EOF
-##    _     _____     _______
-##   | |   |_ _\ \   / / ____|
-##   | |    | | \ \ / /|  _|
-##   | |___ | |  \ V / | |___
-##   |_____|___|  \_/  |_____|
-##
-EOF
-
-}
+function fix_rootfs_fstab(){
 
 
   pr_header "current live fstab"
@@ -467,6 +447,8 @@ proc                     /proc  proc    defaults          0       0
 UUID=${UUID_BOOT}  /boot  vfat    defaults          0       2
 UUID=${UUID_ROOTFS}  /      ext4    defaults,noatime  0       1
 EOF
+
+  sync
 
 }
 
@@ -488,12 +470,13 @@ function main(){
   overwrite_cmdline_for_boot
   fix_resize_script
 
-  enable_rpi_serial_console
+  # enable_rpi_serial_console
 
   # restore triggers the recovery from the running rpi
   make_restore_script
 
-  # make_live
+  # @TODO do we want to do this for both the rootfs and recovery.zip?
+  fix_rootfs_fstab
 
   # recovery is triggered after reboot to restore partition
   make_recovery_script
