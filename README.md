@@ -34,10 +34,8 @@ get away with 8GB for lite images.
 git clone https://github.com/limepepper/raspberry-pi-factory-reset.git
 ```
 
-2. Download the source [image]() and save it to the project directory
+2. Download a source [image]() and save it to the root of the project directory
 ```
-$ pwd
-~/git/raspberry-pi-factory-reset
 
 $ ls
 2021-03-04-raspios-buster-armhf-lite.img
@@ -46,15 +44,19 @@ create-factory-reset
 
 3. Make the script exevutable
 
-    $ chmod +x create-factory-reset
+```
+$ chmod +x create-factory-reset
+```
 
 4. Execute the script which modifies the image:
 
-    $ sudo ./create-factory-reset -i 2021-03-04-raspios-buster-armhf-lite.img
+```
+$ sudo ./create-factory-reset -i 2021-03-04-raspios-buster-armhf-lite.img
+```
 
 ### Resetting the rPi back to factory state
 
-For example you could do the following (over ssh):
+For example you could do the following (over ssh) from the rPi:
 
     root@raspberrypi:~# /boot/factory_reset --reset
     factory restore script
@@ -80,7 +82,7 @@ in the sdcard.
 
 This script modifies the rasbian image file to add the following features:
 
-1. Adds a partition used for recovery containing a pristine copy of Pi OS
+1. Adds a 3rd partition used for recovery containing a pristine copy of Pi OS
 2. adds a utility to the root partition to call a factory-reset
 
 Build Prerequisites
