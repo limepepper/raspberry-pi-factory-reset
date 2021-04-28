@@ -37,12 +37,17 @@ git clone https://github.com/limepepper/raspberry-pi-factory-reset.git
 2. Download a source [image]() and save it to the root of the project directory
 ```
 
+$ wget https://downloads.raspberrypi.org/raspios_armhf/images/raspios_armhf-2021-03-25/2021-03-04-raspios-buster-armhf.zip
+
+$ unzip 2021-03-04-raspios-buster-armhf.zip
+
 $ ls
+2021-03-04-raspios-buster-armhf.zip
 2021-03-04-raspios-buster-armhf-lite.img
 create-factory-reset
 ```
 
-3. Make the script exevutable
+3. Make the script executable
 
 ```
 $ chmod +x create-factory-reset
@@ -53,6 +58,13 @@ $ chmod +x create-factory-reset
 ```
 $ sudo ./create-factory-reset -i 2021-03-04-raspios-buster-armhf-lite.img
 ```
+
+5. This will produce a new image with  `restore` suffix like so;
+
+```
+2021-03-04-raspios-buster-armhf.restore.img
+```
+you can flash this to the rPi
 
 ### Resetting the rPi back to factory state
 
