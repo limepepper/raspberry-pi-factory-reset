@@ -11,6 +11,10 @@ This repo contains a script which can be used to create a Pi OS/raspian image
 which has a `/boot/factory_reset` utility which can be used to reset the pi
 remotely over ssh back to the pristine installation state.
 
+The factory reset causes the rPi to reboot to a recovery partition, upon which
+it restores the original root partition, and then reboots back to the fresh
+installation.
+
 ## Usage
 
 :warning: Factory-resetting will delete any data off the root partition during
