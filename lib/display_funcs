@@ -169,7 +169,30 @@ pr_ok()
   }
 }
 
+pr_section(){
 
+  [[ $# -gt 0 ]] && \
+  {
+    line=$1
+
+       echo -en "${CYANFG}"
+       printf "%s" "${line:0:120}"
+       echo -en "${RESET}"
+       echo
+
+  } || \
+  {
+  while read -r  line; do
+      # printf "%s" "$data"
+       echo -en "${CYANFG}"
+       printf "%s" "${line:0:120}"
+       echo -en "${RESET}"
+       echo
+  done
+
+  }
+
+}
 
 pr_alert()
 {
@@ -178,7 +201,7 @@ pr_alert()
   {
     line=$1
 
-       echo -en "${RED}${WHITEBG}"
+       echo -en "${RED}${MAGENTABG}"
        printf "%s" "${line:0:80}"
        echo -en "${RESET}"
        echo

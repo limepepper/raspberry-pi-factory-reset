@@ -1,15 +1,18 @@
-Raspberry Pi factory reset utility
+Raspbian / Pi OS factory reset images
 =========
 
-This script modifies a raspbian image to add a restore partition and a
-`factory_reset` command, which can be used in a running system to reset it back
+This [releases](https://github.com/limepepper/raspberry-pi-factory-reset/releases)
+in this repo are modified raspbian/Pi OS images which have an added restore partition
+and a `factory_reset` command, which can be used in a running system to reset it back
 to a fresh installation.
+
+Its mostly useful for testing automated deployments of
+software to raspberry pi and will delete any data off the root partition during
+restoration.
 
 Download an image from the [releases](https://github.com/limepepper/raspberry-pi-factory-reset/releases) section and flash it to an sdcard. You generally want at least 32GB card, but you might
 be able to get away with 16GB.
 
-Its mostly useful for testing automated deployments of software to raspberry pi
-and will delete any data off the root partition during restoration.
 
 For example you could do the following (over ssh):
 
@@ -40,7 +43,6 @@ This script modifies the rasbian image file to add the following features:
 
 1. Adds a partition used for recovery containing a pristine copy of Pi OS
 2. adds a utility to the root partition to call a factory-reset
-3. optionally reset the pi password on the restored OS
 
 Usage
 -----
@@ -49,6 +51,9 @@ In general just use one of the Pi OS images available in the releases section:
 https://github.com/limepepper/raspberry-pi-factory-reset/releases
 
 download the image, unzip it, and flash it to your rPi as normal.
+
+Howewver if you have custom requirements you can build the image locally using
+the following steps:
 
 Build Prerequisites
 -------

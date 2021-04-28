@@ -1,0 +1,105 @@
+#!/bin/bash
+
+# fail on errors, undefined variables, and errors in pipes
+set -eu
+set -o pipefail
+
+usage()
+{
+cat << EOF
+usage: $0 options
+This script is run to create a Pi OS image with factory reset utility
+OPTIONS:
+   -h     Show this message
+   -s     process in steps, outputting useful information and waiting for
+          user to confirm before proceeding
+   -i     source image, from downloads.raspberrypi.org, unzipped (optional)
+          this file should exist in the current directory
+          if not provided this will default to 2021-01-11-raspios-buster-armhf-lite.img
+   -c     cleanup and exit. requires -i (or will cleaup default image)
+          removes intermediate img files, unmounts loopbacks
+          and any mounted img file filesystems
+   -e     cleaup at end. generally you want this
+EOF
+}
+
+OPTION_CLEANUP_PRE=""
+OPTION_CLEANUP_POST=""
+OPTION_BASE=""
+OPTION_STEPS=""
+OPTION_DO_MAIN=1
+
+while getopts “rhcesi:p:v” OPTION
+do
+     case $OPTION in
+         h)
+            echo "in help"
+             usage
+             exit 1
+             ;;
+         c)
+             # vvv=$OPTARG
+             OPTION_CLEANUP_PRE=1
+            ;;
+         e)
+             # vvv=$OPTARG
+             OPTION_CLEANUP_POST=1
+            ;;
+         s)
+             # vvv=$OPTARG
+             OPTION_STEPS=1
+            ;;
+         i)
+             # vvv=$OPTARG
+             OPTION_BASE=${OPTARG}
+            ;;
+         r)
+             # vvv=$OPTARG
+             OPTION_CLEANUP_PRE=1
+             OPTION_DO_MAIN=""
+            ;;
+         ?)
+            echo "in usage"
+             usage
+             exit
+             ;;
+     esac
+done
+
+shift $((OPTIND-1))
+
+# get current source dir, even if its hidden in links
+# needed for full paths relative to this script
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+source ./lib/display_funcs
+source ./lib/setup.sh
+source ./lib/utils.sh
+
+echo "OPTION_BASE is ${OPTION_BASE}"
+echo "BASE is $BASE"
+
+if [ ! -z "${OPTION_CLEANUP_PRE}" ]; then
+  cleanup
+fi
+
+check_prerequisites
+check_sources
+check_distribution
+
+echo "OPTION_DO_MAIN $OPTION_DO_MAIN"
+
+[ -z "${OPTION_DO_MAIN}" ] || main
+
+if [ ! -z "${OPTION_CLEANUP_POST}" ]; then
+  cleanup
+fi
+
+pr_header "finished"
+echo "BASE is $BASE.restore.img"

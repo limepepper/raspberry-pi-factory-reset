@@ -1,45 +1,134 @@
 
 
 function check_sources(){
+
+  pr_header "check sources exist"
+
   [ -f ${IMG_ORIG} ] || { echo "Not found source image '${IMG_ORIG}'" && exit;  }
   [ -f ${RECOVERY_SCRIPT_SOURCE} ] || { echo "Not found ${RECOVERY_SCRIPT_SOURCE}" && exit;  }
-  echo "check_sources complete"
+
+  pr_ok "check_sources complete"
+}
+
+function check_distribution(){
+
+  pr_header "only support specific releases"
+
+  case $BASE in
+
+  "2018-03-13-raspbian-stretch-lite")
+    pr_ok "distro is $BASE"
+
+    P1_START=8192
+    P1_SIZE=524288
+    P2_START=532480
+    P2_SIZE=4028768
+    P3_START=4561248
+    P3_SIZE=$(sfdisk --json $BASE.img |
+          jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img2\") .size ")
+
+    OPTION_DO_RESIZE=""
+
+
+    ;;
+
+  "2020-02-13-raspbian-buster-lite")
+    pr_ok "distro is $BASE"
+
+    P1_START=8192
+    P1_SIZE=524288
+    P2_START=532480
+    P2_SIZE=4028768
+    P3_START=4561248
+    P3_SIZE=3080192
+
+    ;;
+
+  "2021-01-11-raspios-buster-armhf-lite")
+    pr_ok "distro is $BASE"
+
+    P1_START=8192
+    P1_SIZE=524288
+    P2_START=532480
+    P2_SIZE=4028768
+    P3_START=4561248
+    P3_SIZE=3104768
+
+    ;;
+
+  "2021-03-04-raspios-buster-armhf-lite")
+    pr_ok "distro is $BASE"
+
+    P1_START=8192
+    P1_SIZE=524288
+    P2_START=532480
+    P2_SIZE=4028768
+    P3_START=4561248
+    P3_SIZE=3112960
+    ;;
+
+  *)
+    pr_warn "not found distro for '$BASE'"
+    pr_ok "attempting to determine partition sizes from source"
+
+    P1_START=8192
+    P1_SIZE=524288
+    P2_START=532480
+    P2_SIZE=4028768
+    P3_START=4561248
+    P3_SIZE=$(sfdisk --json $BASE.img |
+          jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img2\") .size ")
+      ;;
+  esac
+
+  pr_ok "partition values"
+
+cat << EOF
+  P1_START=   ${P1_START}
+  P1_SIZE=    ${P1_SIZE}
+  P2_START=   ${P2_START}
+  P2_SIZE=    ${P2_SIZE}
+  P3_START=   ${P3_START}
+  P3_SIZE=    ${P3_SIZE}
+EOF
+
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
 function cleanup()
 {
-  sudo umount -f -d mnt/restore_boot > /dev/null 2>&1 || true
-  sudo umount -f -d mnt/restore_rootfs > /dev/null 2>&1 || true
-  sudo umount -f -d mnt/restore_recovery > /dev/null 2>&1 || true
 
-  for imgname in $IMG_RESTORE $IMG_LIVE; do
+  pr_header "cleanup devices, mounts, etc"
+
+  pr_section "sync'ing filesystem"
+  # no idea if this makes any difference???
+  sync
+
+  pr_section "unmounting restore filesystems"
+
+  sudo umount -d mnt/restore_boot > /dev/null 2>&1 || true
+  sudo umount -d mnt/restore_rootfs > /dev/null 2>&1 || true
+  sudo umount -d mnt/restore_recovery > /dev/null 2>&1 || true
+
+  pr_section "detaching any loopback devices"
+
+  for imgname in $IMG_RESTORE $IMG_ORIG; do
     # echo $imgname
     while losetup -a | grep "${imgname}" > /dev/null 2>&1; do
       TMPLOOP="$(losetup -a | grep "${imgname}" | head -1| awk '{ print $1 }')"
       TMPLOOP=${TMPLOOP%:}
       echo $TMPLOOP
       sudo losetup --detach ${TMPLOOP}
-      echo removed
+      echo "detached ${TMPLOOP}"
     done
   done
 
-}
+  # Perform a garbage collection pass on the blkid cache to remove devices
+  # which no longer exist
+  sudo blkid --garbage-collect
 
-# the main idea here is to be able to recover from a failed build
-cleanup_pre(){
-  echo "cleaning up pre"
-  cleanup
-  echo "cleaned up pre"
-}
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 
-# the main idea of having a cleanup post method distinct from pre
-# was that it would be considered a successful build, and therefore
-# remove any intermediate images and stuff that would be useful for
-# debugging
-cleanup_post(){
-  echo "cleaning up post"
-  cleanup
-  echo "cleaned up post"
 }
 
 function check_prerequisites()
@@ -54,6 +143,7 @@ function check_prerequisites()
       partprobe
       blkid
       e2label
+      jq
   )
 
   for cmd in "${cmds[@]}"; do
@@ -62,11 +152,18 @@ function check_prerequisites()
       exit 99
     fi
   done
+
+  pr_ok "found necessary utilites in path"
+
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
 
 # generate new UUIDs for the copy of the original image
 function make_uuids(){
+
+  pr_header "make UUID/partuuids for restore filesystems"
+
   # partuuid seems to get reset by resize.sh, however UUID doesn't seem to work
   set +o pipefail
   PARTUUID=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
@@ -74,90 +171,58 @@ function make_uuids(){
 
   [ ! -z ${PARTUUID} ] || { echo "PARTUUID is empty '${PARTUUID}'" && exit 99;  }
 
-  pr_ok "PARTUUID generated is ${PARTUUID}"
-
   # because of cloning the images, need to generate new UUIDs
   UUID_RESTORE=$(uuidgen)
+  [ ! -z "$UUID_RESTORE" ] || { echo "UUID_RESTORE Empty: can't proceed"; exit 99; }
   UUID_ROOTFS=$(uuidgen)
+  [ ! -z "$UUID_ROOTFS" ] || { echo "UUID_ROOTFS Empty: can't proceed"; exit 99; }
+
+  pr_ok "PARTUUID:     ${PARTUUID}"
+  pr_ok "UUID_RESTORE: ${UUID_RESTORE}"
+  pr_ok "UUID_ROOTFS:  ${UUID_ROOTFS}"
+
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
 # make a copy of the original img file
 # mounts the partitions from the new img onto loopback devices
 #
-function make_looplive_and_mount(){
+function make_loop_and_mount_original(){
 
-  pr_header "make a copy of the pristine image for use as the live rootfs"
+  pr_header "mount the original img readonly on loopback"
 
-  [[ -f "${IMG_LIVE}" ]] && \
-  {
-    pr_warn "live file ${IMG_LIVE} already, exists - overwriting"
-    cp -f ${IMG_ORIG} ${IMG_LIVE}
-    pr_ok "${IMG_LIVE} already, exists - overwriting"
-  } || \
-  {
-    cp -f ${IMG_ORIG} ${IMG_LIVE}
-    pr_ok "${IMG_LIVE} created"
-  }
+  pr_ok "show source image partition (from sfdisk --dump"
+  sfdisk -d $IMG_ORIG
 
-  LOOP_LIVE=$(sudo losetup --show -f -P ${IMG_LIVE})
-  echo "LOOP LIVE is ${LOOP_LIVE}"
-  sudo partprobe ${LOOP_LIVE}
+  LOOP_ORIG=$(sudo losetup \
+        --read-only \
+        --nooverlap \
+        --show \
+        --find \
+        --partscan \
+           ${IMG_ORIG})
+  [ ! -z "$LOOP_ORIG" ] || { echo "LOOP_ORIG Empty: can't proceed"; exit 99; }
+
+  echo "The Original img is mounted readonly at ${LOOP_ORIG}"
+  sudo partprobe ${LOOP_ORIG}
   echo ""
+
+  UUID_BOOT="$(sudo blkid -s UUID -o value ${LOOP_ORIG}p1)"
+  [ ! -z "$UUID_BOOT" ] || { echo "UUID_BOOT Empty: can't proceed"; exit 99; }
 
   # cat /proc/partitions
-  sudo losetup -a
-  sudo blkid
-  echo ""
-}
+  # sudo losetup -a
+  # sudo blkid
+  # echo ""
 
-function get_uuid_for_boot(){
-
-  # @TODO this seems to be using the same UUID for live and restore???
-  # UUID_BOOT gets used later which writing fstab out
-  # set UUID_BOOT from live img boot partition
-  UUID_BOOT=$(blkid -o export ${LOOP_LIVE}p1 | egrep '^UUID=' | cut -d'=' -f2)
-
-  # fail if we didn't get the boot UUID
-  [  -z "$UUID_BOOT" ] && \
-  {
-    echo "UUID_BOOT Empty: Yes"
-    exit 99
-  } || \
-  {
-    echo "Empty: No"
-    pr_warn "UUID_BOOT is ${UUID_BOOT}"
-  }
-
-  pr_warn "UUID_BOOT is ${UUID_BOOT}"
-  echo ""
-
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
 # the restore img is the file that contains the partitions that will
 # ultimately get written out to the sdcard
-function make_looprestore_and_mount(){
+function make_loop_and_mount_restore(){
 
   pr_header "make img restore and mount it"
-
-  # sizes used here are just a guess at something that will be big enough
-  # it would probably make sense to calculate this correctly to save
-  # time writing, zipping and flashing out 8GB files
-  [[ -f "${IMG_RESTORE}" ]] && \
-  {
-    pr_warn "restore file ${IMG_RESTORE} already, exists - overwriting"
-    dd if=/dev/zero bs=4M count=2048 > ${IMG_RESTORE}
-  } || \
-  {
-    pr_ok "restore file ${IMG_RESTORE} creating"
-    dd if=/dev/zero bs=4M count=2048 > ${IMG_RESTORE}
-    # touch ${IMG_RESTORE}
-  }
-  fdisk -l ${IMG_RESTORE}
-
-  [[ -z "${PARTUUID}" ]] && {
-      echo "partuuid is empty"
-      exit 99
-      }
 
 # this could also be dynamically determined, but needs partition 2 to be
 # large enough to fit a zipped copy of partiion 3 for restoring
@@ -165,46 +230,50 @@ function make_looprestore_and_mount(){
 
   tmpfile=$(mktemp /tmp/reset_sfdisk.XXXXXX)
 
-  case $BASE in
-
-  "2021-01-11-raspios-buster-armhf-lite")
 cat << EOF > ${tmpfile}
 label: dos
 label-id: 0x${PARTUUID}
 unit: sectors
 
-${IMG_RESTORE}1 : start=8192,     size=524288,    type=c
-${IMG_RESTORE}2 : start=532480,   size=4028768,   type=83
-${IMG_RESTORE}3 : start=4561248,  size=3104768,   type=83
+${IMG_RESTORE}1 : start=${P1_START},     size=${P1_SIZE},    type=c
+${IMG_RESTORE}2 : start=${P2_START},   size=${P2_SIZE},   type=83
+${IMG_RESTORE}3 : start=${P3_START},  size=${P3_SIZE},   type=83
 
 EOF
-    ;;
 
-  "2021-03-04-raspios-buster-armhf-lite")
-cat << EOF > ${tmpfile}
-label: dos
-label-id: 0x${PARTUUID}
-unit: sectors
+  # final sector of filesystem
+  P3_END=$(( P3_START + P3_SIZE - 1 ))
+  TOTAL_SIZE_BYTES=$(( P3_END * SECTOR_BYTES ))
+  BLOCKSIZE=$(( 1024 * 1024 * 4 ))
+  BSCOUNT=$(( TOTAL_SIZE_BYTES / BLOCKSIZE ))
+  echo "BSCOUNT: $BSCOUNT"
 
-${IMG_RESTORE}1 : start=8192,     size=524288,    type=c
-${IMG_RESTORE}2 : start=532480,   size=4028768,   type=83
-${IMG_RESTORE}3 : start=4561248,  size=3112960,   type=83
 
-EOF
-    ;;
-    *)
-cat << EOF > ${tmpfile}
-label: dos
-label-id: 0x${PARTUUID}
-unit: sectors
+  if [ $(( TOTAL_SIZE_BYTES % BLOCKSIZE )) -ne 0 ]; then
+    BSCOUNT=$(( BSCOUNT + 1 ))
+  else
+    #BSCOUNT=$(( TOTAL_SIZE_BYTES / BLOCKSIZE ))
+    echo "BS COUNT remainder was zero"
+  fi
 
-${IMG_RESTORE}1 : start=8192,     size=524288,    type=c
-${IMG_RESTORE}2 : start=532480,   size=4028768,   type=83
-${IMG_RESTORE}3 : start=4561248,  size=3104768,   type=83
+  echo "remainder: $(( TOTAL_SIZE_BYTES % BLOCKSIZE ))"
+  echo "BLOCKSIZE: $BLOCKSIZE"
+  echo "TOTAL SIZE BYTES: $TOTAL_SIZE_BYTES"
+  echo "P3_END: $P3_END"
+  echo "BSCOUNT: $BSCOUNT"
 
-EOF
-      ;;
-  esac
+  [[ -f "${IMG_RESTORE}" ]] && \
+  {
+    pr_warn "restore file ${IMG_RESTORE} already, exists - overwriting"
+  } || \
+  {
+    pr_ok "restore file ${IMG_RESTORE} creating"
+    # touch ${IMG_RESTORE}
+  }
+
+  dd if=/dev/zero bs=4M count=${BSCOUNT} > ${IMG_RESTORE}
+
+  # fdisk -l ${IMG_RESTORE}
 
   sfdisk ${IMG_RESTORE} < "$tmpfile"
 
@@ -214,40 +283,43 @@ EOF
   fdisk -lu ${IMG_RESTORE}
 
   LOOP_RESTORE=$(sudo losetup -v  --show -f -P ${IMG_RESTORE})
+  [ ! -z "$LOOP_RESTORE" ] || { echo "LOOP_RESTORE Empty: can't proceed"; exit 99; }
 
-  pr_header "partprobe the new loopback device - ${LOOP_RESTORE}"
+  pr_ok "partprobe the new loopback device - ${LOOP_RESTORE}"
   sudo partprobe ${LOOP_RESTORE}
 
-  pr_header "show the partitions"
+  pr_ok "show the partitions"
   losetup -a
+
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 
 }
 
-function copy_live_to_restore(){
+function copy_original_to_restore(){
 
   pr_header "3.4 copy the filesystem partitions to the restore img"
 
-  sudo dd if=${LOOP_LIVE}p1 of=${LOOP_RESTORE}p1 bs=4M
-  sudo dd if=${LOOP_LIVE}p2 of=${LOOP_RESTORE}p2 bs=4M
-  sudo dd if=${LOOP_LIVE}p2 of=${LOOP_RESTORE}p3 bs=4M
+  sudo dd if=${LOOP_ORIG}p1 of=${LOOP_RESTORE}p1 bs=4M
+  sudo dd if=${LOOP_ORIG}p2 of=${LOOP_RESTORE}p2 bs=4M
+  sudo dd if=${LOOP_ORIG}p2 of=${LOOP_RESTORE}p3 bs=4M
 
   # make sure the partitions on the loop device are available
   sudo partprobe ${LOOP_RESTORE}
 
-  pr_header "3.6 call tunefs to set label and UUID"
+  pr_ok "3.6 call tunefs to set label and UUID"
 
-  echo $UUID_RESTORE
-  echo $LOOP_RESTORE
+  # echo $UUID_RESTORE
+  # echo $LOOP_RESTORE
 
   sudo tune2fs ${LOOP_RESTORE}p2 -U ${UUID_RESTORE}
   sudo e2label ${LOOP_RESTORE}p2 recoveryfs
 
   sudo tune2fs ${LOOP_RESTORE}p3 -U ${UUID_ROOTFS}
 
-  pr_header "3.7 call partprobe"
+  pr_ok "3.7 call partprobe"
   sudo partprobe ${LOOP_RESTORE}
 
-  pr_header "3.8 resize the fs on the recovery partition to fit the restore img"
+  pr_ok "3.8 resize the fs on the recovery partition to fit the restore img"
   sudo e2fsck -f ${LOOP_RESTORE}p2
   # this is necessary to make the space for the recovery.zip
   sudo resize2fs ${LOOP_RESTORE}p2
@@ -262,36 +334,50 @@ function copy_live_to_restore(){
   sudo mount ${LOOP_RESTORE}p2 mnt/restore_recovery
   sudo mount ${LOOP_RESTORE}p3 mnt/restore_rootfs
 
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
+
 }
 
 
 function overwrite_cmdline_for_boot(){
 
   pr_header "4.0 current boot cmdline.txt"
+
+  pr_ok "current cmdline.txt is"
   cat mnt/restore_boot/cmdline.txt
 
-  pr_header "4.1 create the boot from live rootfs cmdline.txt"
+  pr_ok "saving original cmdline.txt"
+  sudo cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_from_pristine
+
+  pr_ok "4.1 create the boot from live rootfs cmdline.txt"
 
 sudo tee mnt/restore_boot/cmdline.txt << EOF
 console=serial0,115200 console=tty1 root=PARTUUID=${PARTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=/usr/lib/raspi-config/init_resize.sh
 EOF
 
-  pr_header "4.3 create alt cmd file for recovery boot"
+  pr_ok "4.3 create alt cmd file for recovery boot"
 
 sudo tee mnt/restore_boot/cmdline.txt_recovery << EOF
 console=serial0,115200 console=tty1 root=PARTUUID=XXXYYYXXX rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet init=${RECOVERY_SCRIPT_TARGET}
 EOF
+
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 
 }
 
 # doesn't wait for error message
 function fix_resize_script(){
 
+  pr_header "fix_resize_script"
+
+  pr_ok "copy the custom init_resize.sh into rootfs"
+
   sudo cp "${RESIZE_SCRIPT_SOURCE}" "mnt/restore_rootfs${RESIZE_SCRIPT_TARGET}"
   sudo chmod +x "mnt/restore_rootfs${RESIZE_SCRIPT_TARGET}"
 
   sync
 
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
 function enable_rpi_serial_console(){
@@ -307,6 +393,7 @@ function enable_rpi_serial_console(){
     echo 'enable_uart=1' | sudo tee -a mnt/restore_boot/config.txt
   }
 
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
 function make_restore_script(){
@@ -316,9 +403,9 @@ function make_restore_script(){
 #  |_|_\___/__/\__\___/_| \___|___/\__|_| |_| .__/\__|
 #                                           |_|
 
-  pr_header "4.4 create factory reset script - run this from live"
+  pr_header "4.4 create factory reset script in /boot directory"
 
-sudo tee mnt/restore_boot/factory_reset << EOF
+sudo tee mnt/restore_boot/factory_reset > /dev/null << EOF
 #!/bin/bash
 
 echo "factory restore script"
@@ -342,25 +429,23 @@ echo "factory restore script"
 
   cp -f /boot/cmdline.txt /boot/cmdline.txt_original
   cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
+
   sed -i "s/XXXYYYXXX/\$(blkid -o export  \
         /dev/disk/by-label/recoveryfs | \
          egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
-  echo "show blkid"
-  blkid
-  echo ""
 
-  echo "show mount | grep mmc"
-  mount | grep mmc
-  echo ""
+  # echo "show blkid"
+  # blkid
+  # echo ""
 
   echo "show rootfs fstab"
   cat /etc/fstab
   echo ""
 
-  echo "show recoveryfs fstab"
-  mkdir -p /mnt/recoveryfs
-  mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs
-  cat /mnt/recoveryfs/etc/fstab
+  # echo "show recoveryfs fstab"
+  # mkdir -p /mnt/recoveryfs
+  # mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs
+  # cat /mnt/recoveryfs/etc/fstab
 
   umount -f /mnt/recoveryfs
   echo ""
@@ -369,9 +454,7 @@ echo "factory restore script"
   cat /boot/cmdline.txt
   echo ""
 
-  # pause before rebooting to check debugs
   echo "rebooting..."
-  # read -p "Press [Enter] key to start reboot..."
   reboot
   exit 0
 }
@@ -380,19 +463,20 @@ EOF
 
   sudo chmod +x mnt/restore_boot/factory_reset
 
-  pr_header "4.7 copy init_restore.sh to recovery"
+  pr_ok "copy init_restore.sh to recovery"
   sudo cp "${RECOVERY_SCRIPT_SOURCE}" "mnt/restore_recovery${RECOVERY_SCRIPT_TARGET}"
   sudo chmod +x "mnt/restore_recovery${RECOVERY_SCRIPT_TARGET}"
 
-  pr_header "4.8 current boot cmdline.txt"
+  pr_ok "current boot cmdline.txt"
   cat mnt/restore_boot/cmdline.txt
 
-  pr_header "4.9 current boot cmdline.txt txt_recovery"
+  pr_ok "current boot cmdline.txt txt_recovery"
   cat mnt/restore_boot/cmdline.txt_recovery
 
-  pr_header "4.9.1 enable ssh on the image"
+  pr_ok "enable ssh on the image"
   sudo touch mnt/restore_boot/ssh
 
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
 
@@ -401,7 +485,7 @@ function make_recovery_script(){
   pr_header "current recovery fstab"
   cat mnt/restore_recovery/etc/fstab
 
-  pr_header "indicate this is a recovery shell"
+  pr_ok "indicate this is a recovery shell"
 
 # not sure this is getting used on the console...?
 sudo tee mnt/restore_recovery/etc/motd << EOF
@@ -413,14 +497,14 @@ sudo tee mnt/restore_recovery/etc/motd << EOF
 ##
 EOF
 
-pr_header "map the recovery fstab to the 2nd partition"
+pr_ok "map the recovery fstab to the 2nd partition"
 sudo tee mnt/restore_recovery/etc/fstab << EOF
 proc                    /proc  proc    defaults          0       0
 UUID=${UUID_BOOT}       /boot  vfat    defaults          0       2
 UUID=${UUID_RESTORE}    /      ext4    defaults,noatime  0       1
 EOF
 
-pr_header "copy the recovery image to the recovery /opt dir for restoring"
+pr_ok "copy the recovery image to the recovery /opt dir for restoring"
 
 sync
 
@@ -440,7 +524,7 @@ function fix_rootfs_fstab(){
   pr_header "current live fstab"
   cat mnt/restore_rootfs/etc/fstab
 
-  pr_header "map the live fstab to the 3rd partition"
+  pr_ok "map the live fstab to the 3rd partition"
 
 sudo tee mnt/restore_rootfs/etc/fstab << EOF
 proc                     /proc  proc    defaults          0       0
@@ -458,17 +542,15 @@ function main(){
 
   make_uuids
 
-  make_looplive_and_mount
+  make_loop_and_mount_original
 
-  # extract out the boot UUID into var for later use
-  get_uuid_for_boot
+  make_loop_and_mount_restore
 
-  make_looprestore_and_mount
-
-  copy_live_to_restore
+  copy_original_to_restore
 
   overwrite_cmdline_for_boot
-  fix_resize_script
+
+  [ -z "${OPTION_DO_RESIZE}" ] || fix_resize_script
 
   # enable_rpi_serial_console
 
@@ -481,6 +563,4 @@ function main(){
   # recovery is triggered after reboot to restore partition
   make_recovery_script
 
-
-  echo $UUID_BOOT
 }
