@@ -38,8 +38,8 @@ get away with 8GB for lite images.
 git clone https://github.com/limepepper/raspberry-pi-factory-reset.git
 ```
 
-2. Download a source [image]() and save it to the root of the project directory
-then unzip it
+2. Download a source [image](https://downloads.raspberrypi.org/raspios_lite_armhf/images/)
+nd save it to the root of the project directory then unzip it
 ```
 
 $ wget https://downloads.raspberrypi.org/raspios_armhf/images/raspios_armhf-2021-03-25/2021-03-04-raspios-buster-armhf.zip
