@@ -85,7 +85,8 @@ https://downloads.raspberrypi.org/raspbian_lite/images/
 
 Run the script like so;
 
-    bash  ./main.sh -c -e -i 2021-03-04-raspios-buster-armhf-lite.img
+    $ chmod +x create-factory-reset
+    $ sudo ./create-factory-reset -c -e -i 2021-03-04-raspios-buster-armhf-lite.img
 
 script will ask for sudo password when required
 
@@ -113,21 +114,6 @@ Assuming these images are similarly structured, they would work as well, but the
 are not tested.
 
 
-
-
-
-Dependencies
-------------
-
-Running the script requires local sudo to mount stuff
-
-This script was developed on a linux desktop with packages installed for working
-with disk images, archives and filesystems. The command lines tools I used are
-available in the fedora/EPEL repos, and I assume are similarly available in
-Ubuntu and mainstream distros.
-
-* zip
-* uuid
 
 Warning
 -------
