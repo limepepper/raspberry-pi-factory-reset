@@ -69,6 +69,10 @@ you can flash this to the rPi
 
 ### Resetting the rPi back to factory state
 
+Once the pi is booted, it will work as a normal Pi OS/raspbian installation,
+however it includes a utility which can be run as root with `--reset` argument,
+which will trigger a factory-reset.
+
 For example you could do the following (over ssh) from the rPi:
 
     root@raspberrypi:~# /boot/factory_reset --reset
