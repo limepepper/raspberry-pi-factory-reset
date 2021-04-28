@@ -1,18 +1,58 @@
-Raspbian / Pi OS factory reset images
-=========
+# Raspbian / Pi OS factory reset images
 
-This [releases](https://github.com/limepepper/raspberry-pi-factory-reset/releases)
-in this repo are modified raspbian/Pi OS images which have an added restore partition
-and a `factory_reset` command, which can be used in a running system to reset it back
-to a fresh installation.
+## Description
 
-Its mostly useful for testing automated deployments of
-software to raspberry pi and will delete any data off the root partition during
+If you regularly need to reset or restore a Raspberry Pi, it can become a bit
+annoying to have to power down the rPi, unplug the sdcard, and re-flash the
+original image back again. Not to mention it causes mechanical stress to the device
+and requires physical access to the rPi.
+
+This repo contains a script which can be used to create a Pi OS/raspian image
+which has a `/boot/factory_reset` utility which can be used to reset the pi
+remotely over ssh back to the pristine installation state.
+
+## Usage
+
+:warning: Factory-resetting will delete any data off the root partition during
 restoration.
 
-Download an image from the [releases](https://github.com/limepepper/raspberry-pi-factory-reset/releases) section and flash it to an sdcard. You generally want at least 32GB card, but you might
-be able to get away with 16GB.
+### Ready to use images
 
+These Pi OS/raspbian images can be directly flashed and run:
+
+https://github.com/limepepper/raspberry-pi-factory-reset/releases
+
+### Building your own image
+
+You will need an sdcard with at least enough space to flash the images. The
+released images and script were tested with 32GB cards, but you might be able to
+get away with 8GB for lite images.
+
+1. clone the repo
+
+```
+git clone https://github.com/limepepper/raspberry-pi-factory-reset.git
+```
+
+2. Download the source [image]() and save it to the project directory
+```
+$ pwd
+~/git/raspberry-pi-factory-reset
+
+$ ls
+2021-03-04-raspios-buster-armhf-lite.img
+create-factory-reset
+```
+
+3. Make the script exevutable
+
+    $ chmod +x create-factory-reset
+
+4. Execute the script which modifies the image:
+
+    $ sudo ./create-factory-reset -i 2021-03-04-raspios-buster-armhf-lite.img
+
+### Resetting the rPi back to factory state
 
 For example you could do the following (over ssh):
 
@@ -31,8 +71,7 @@ The pi will then reboot back to a fresh installation of Raspbian. The script
 sets up the restored raspbian so ssh is running and available.
 
 
-Background
------
+# Background
 
 A typical raspbian image contains 2 partitions, one with the boot partition
 and the other with the root partition containing the OS. Upon first booting,
@@ -43,17 +82,6 @@ This script modifies the rasbian image file to add the following features:
 
 1. Adds a partition used for recovery containing a pristine copy of Pi OS
 2. adds a utility to the root partition to call a factory-reset
-
-Usage
------
-
-In general just use one of the Pi OS images available in the releases section:
-https://github.com/limepepper/raspberry-pi-factory-reset/releases
-
-download the image, unzip it, and flash it to your rPi as normal.
-
-Howewver if you have custom requirements you can build the image locally using
-the following steps:
 
 Build Prerequisites
 -------
@@ -69,35 +97,6 @@ debian/ubuntu
 (and any other packages providing tools for your distro...) This has only been
 tested on fedora 33
 
-Build Instructions
---------
-
-The script requires a locally available base image of raspbian in the same
-directory as the script. For example:
-
-    $ ls
-    2021-03-04-raspios-buster-armhf-lite.img
-    main.sh
-
-This script was tested with the series of images available here:
-https://downloads.raspberrypi.org/raspbian_lite/images/
-
-
-Run the script like so;
-
-    $ chmod +x create-factory-reset
-    $ sudo ./create-factory-reset -c -e -i 2021-03-04-raspios-buster-armhf-lite.img
-
-script will ask for sudo password when required
-
-To write the image to sdcard on linux, use something like this...
-
-
-    sudo dd bs=4M \
-        if=2021-01-11-raspios-buster-armhf-lite.restore.img \
-        of=/dev/sdXXXX \
-        conv=fsync \
-        status=progress
 
 
 

@@ -67,7 +67,23 @@ function check_distribution(){
     P3_SIZE=3112960
     ;;
 
+  # this is "Raspberry Pi OS with desktop"
+  # https://downloads.raspberrypi.org/raspios_armhf/images/raspios_armhf-2021-03-25/2021-03-04-raspios-buster-armhf.zip
+
+  "2021-03-04-raspios-buster-armhf")
+    pr_ok "distro is $BASE"
+
+    P1_START=8192
+    P1_SIZE=524288
+    P2_START=532480
+    P2_SIZE=9028768
+    P3_START=9561248
+    P3_SIZE=7217152
+    ;;
+
   *)
+    # this will only work if the zip of the root fs fits in the P2 free space
+    # P2 must be at least as big as P3
     pr_warn "not found distro for '$BASE'"
     pr_ok "attempting to determine partition sizes from source"
 

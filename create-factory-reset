@@ -11,20 +11,17 @@ usage: $0 options
 This script is run to create a Pi OS image with factory reset utility
 OPTIONS:
    -h     Show this message
-   -s     process in steps, outputting useful information and waiting for
-          user to confirm before proceeding
    -i     source image, from downloads.raspberrypi.org, unzipped (optional)
           this file should exist in the current directory
           if not provided this will default to 2021-01-11-raspios-buster-armhf-lite.img
-   -c     cleanup and exit. requires -i (or will cleaup default image)
-          removes intermediate img files, unmounts loopbacks
-          and any mounted img file filesystems
-   -e     cleaup at end. generally you want this
+   -s     process in steps, outputting useful information and waiting for
+          user to confirm before proceeding
+   -r     do a cleanup and exit
 EOF
 }
 
-OPTION_CLEANUP_PRE=""
-OPTION_CLEANUP_POST=""
+OPTION_CLEANUP_PRE="1"
+OPTION_CLEANUP_POST="1"
 OPTION_BASE=""
 OPTION_STEPS=""
 OPTION_DO_MAIN=1
@@ -43,7 +40,7 @@ do
             ;;
          e)
              # vvv=$OPTARG
-             OPTION_CLEANUP_POST=1
+             OPTION_CLEANUP_POST=0
             ;;
          s)
              # vvv=$OPTARG
@@ -57,6 +54,7 @@ do
              # vvv=$OPTARG
              OPTION_CLEANUP_PRE=1
              OPTION_DO_MAIN=""
+             OPTION_CLEANUP_POST=""
             ;;
          ?)
             echo "in usage"

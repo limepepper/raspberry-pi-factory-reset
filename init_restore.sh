@@ -130,10 +130,10 @@ EOF
   mkdir -p /mnt/rootfs
   mount /dev/mmcblk0p3 /mnt/rootfs
 
-  echo "show blkid for /dev/mmcblk0p3"
-  blkid -o export /dev/mmcblk0p3
-  echo "show blkid for /dev/mmcblk0p3 -p"
-  blkid -p -o export /dev/mmcblk0p3
+  # echo "show blkid for /dev/mmcblk0p3"
+  # blkid -o export /dev/mmcblk0p3
+  # echo "show blkid for /dev/mmcblk0p3 -p"
+  # blkid -p -o export /dev/mmcblk0p3
 
 tee /boot/cmdline.txt << EOF
 console=serial0,115200 console=tty1 root=PARTUUID=${PTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet init=/usr/lib/raspi-config/init_resize.sh
