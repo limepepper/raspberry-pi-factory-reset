@@ -39,7 +39,7 @@ git clone https://github.com/limepepper/raspberry-pi-factory-reset.git
 ```
 
 2. Download a source [image](https://downloads.raspberrypi.org/raspios_lite_armhf/images/)
-nd save it to the root of the project directory then unzip it
+and save it to the root of the project directory then unzip it
 ```
 
 $ wget https://downloads.raspberrypi.org/raspios_armhf/images/raspios_armhf-2021-03-25/2021-03-04-raspios-buster-armhf.zip
@@ -104,7 +104,7 @@ in the sdcard.
 This script modifies the rasbian image file to add the following features:
 
 1. Adds a 3rd partition used for recovery containing a pristine copy of Pi OS
-2. adds a utility to the root partition to call a factory-reset
+2. Adds a utility to the root partition to call a factory-reset
 
 Build Prerequisites
 -------
