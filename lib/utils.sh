@@ -252,6 +252,39 @@ function make_loop_and_mount_original(){
   [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
 }
 
+function make_loop_and_mount_lite(){
+
+  pr_header "mount the liteversion of img readonly on loopback"
+
+  IMG_ORIG_LITE="${DIR}/${BASE}-lite.img"
+
+  pr_ok "show source image partition (from sfdisk --dump)"
+  sfdisk -d $IMG_ORIG_LITE
+
+  LOOP_ORIG_LITE=$(sudo losetup \
+        --read-only \
+        --nooverlap \
+        --show \
+        --find \
+        --partscan \
+           ${IMG_ORIG})
+  [ ! -z "$IMG_ORIG_LITE" ] || { echo "IMG_ORIG_LITE Empty: can't proceed"; exit 99; }
+
+  echo "The Original LITE img is mounted readonly at ${LOOP_ORIG_LITE}"
+  sudo partprobe ${LOOP_ORIG_LITE}
+  echo ""
+
+  UUID_BOOT_LITE="$(sudo blkid -s UUID -o value ${LOOP_ORIG_LITE}p1)"
+  [ ! -z "$UUID_BOOT_LITE" ] || { echo "UUID_BOOT Empty: can't proceed"; exit 99; }
+
+  # cat /proc/partitions
+  # sudo losetup -a
+  # sudo blkid
+  # echo ""
+
+  [ -z "${OPTION_STEPS}" ] || { echo ""; read -p "${MSG_CONTINUE}"; }
+}
+
 # the restore img is the file that contains the partitions that will
 # ultimately get written out to the sdcard
 function make_loop_and_mount_restore(){
