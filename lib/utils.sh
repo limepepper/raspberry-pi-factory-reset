@@ -81,6 +81,19 @@ function check_distribution(){
     P3_SIZE=7217152
     ;;
 
+  # this is "Raspberry Pi OS with desktop"
+
+  "2021-05-07-raspios-buster-armhf")
+    pr_ok "distro is $BASE"
+
+    P1_START=8192
+    P1_SIZE=524288
+    P2_START=532480
+    P2_SIZE=9028768
+    P3_START=9561248
+    P3_SIZE=7241728
+    ;;
+
   *)
     # this will only work if the zip of the root fs fits in the P2 free space
     # P2 must be at least as big as P3
@@ -94,6 +107,11 @@ function check_distribution(){
     P3_START=4561248
     P3_SIZE=$(sfdisk --json $BASE.img |
           jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img2\") .size ")
+
+    echo "didn't find supported image, so don't have tested partition sizes"
+    echo "this might work for lite images, but won't for desktop images"
+    read -p "Press enter to continue"
+    
       ;;
   esac
 
