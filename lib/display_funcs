@@ -98,7 +98,7 @@ pr_header()
   {
     line="$@"
       echo ""
-       echo -en "${BLUE}${WHITEBG}"
+       echo -en "${WHITE}${BLUEBG}"
        printf "%s" "${line:0:100}"
        echo -en "${RESET}"
        echo
@@ -126,7 +126,7 @@ pr_warn()
     line=$1
 
        echo -en "${PINK}"
-       printf "%s" "${line:0:80}"
+       printf "%s" "${line:0:120}"
        echo -en "${RESET}"
        echo
 
@@ -135,7 +135,7 @@ pr_warn()
   while read -r  line; do
       # printf "%s" "$data"
        echo -en "${PINK}"
-       printf "%s" "${line:0:80}"
+       printf "%s" "${line:0:120}"
        echo -en "${RESET}"
        echo
   done
@@ -168,6 +168,86 @@ pr_ok()
 
   }
 }
+
+
+pr_h1()
+{
+
+  [[ $# -gt 0 ]] && \
+  {
+    line=$1
+
+       echo -en "${GREEN}"
+       printf "%s" "${line:0:80}"
+       echo -en "${RESET}"
+       echo
+
+  } || \
+  {
+  while read -r  line; do
+      # printf "%s" "$data"
+       echo -en "${GREEN}"
+       printf "%s" "${line:0:80}"
+       echo -en "${RESET}"
+       echo
+  done
+
+  }
+}
+
+# similar to a h2 tag in html
+pr_h2()
+{
+
+  [[ $# -gt 0 ]] && \
+  {
+    line=$1
+
+       echo -en "${GREEN}"
+       printf "%s" "${line:0:80}"
+       echo -en "${RESET}"
+       echo
+
+  } || \
+  {
+  while read -r  line; do
+      # printf "%s" "$data"
+       echo -en "${GREEN}"
+       printf "%s" "${line:0:80}"
+       echo -en "${RESET}"
+       echo
+  done
+
+  }
+}
+
+
+# similar to a <p> tag in html
+pr_p()
+{
+
+  [[ $# -gt 0 ]] && \
+  {
+    line=$1
+
+       echo -en "${GREEN}"
+       printf "%s" "${line:0:80}"
+       echo -en "${RESET}"
+       echo
+
+  } || \
+  {
+  while read -r  line; do
+      # printf "%s" "$data"
+       echo -en "${GREEN}"
+       printf "%s" "${line:0:80}"
+       echo -en "${RESET}"
+       echo
+  done
+
+  }
+}
+
 
 pr_section(){
 
@@ -272,6 +352,7 @@ wasX=""
   MAGENTABG=$(tput setab 5   2>/dev/null )
      CYANFG=$(tput setaf 6  2>/dev/null )
      CYANBG=$(tput setab 6    2>/dev/null )
+      WHITE=$(tput setaf 7   2>/dev/null )
     WHITEFG=$(tput setaf 7   2>/dev/null )
     WHITEBG=$(tput setab 7  2>/dev/null )
      PURPLE=$(tput setaf 8  2>/dev/null )

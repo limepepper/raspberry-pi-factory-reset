@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# fail on errors, undefined variables, and errors in pipes
+set -eu -o pipefail
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+source "$DIR/lib/display_funcs"
+source "$DIR/lib/usage.sh"
+source "$DIR/lib/setup.sh"
+source "$DIR/lib/utils.sh"
+source "$DIR/lib/stages.sh"
+source "$DIR/lib/checks.sh"
+
+show_setup_var_summary
+
+# this is to cleanup any previous runs that didn't run cleanup at the end
+if [ ! -z "${OPTION_CLEANUP_PRE}" ]; then
+  cleanup
+fi
+
+if [ "$OPT_DO_CHECKS" ] ; then
+  check_prerequisites
+  check_sources
+fi
+
+# populate the vars for the start and size in bytes for original
+[ "$OPT_GET_PART_FOR_ORIG" ] && get_partitions_for_original
+
+# if a lite image is provided, get the start and size in bytes
+[ "$OPT_GET_PART_FOR_LITE" ] && get_partitions_for_lite
+
+# # to avoid conflicts, generate uuids for boot, recovery, root partions
+[ "$OPT_MAKE_UUIDS" ] && make_uuids
+
+# # mount the boot and root partiions of source img to loopback devices
+[ "$OPT_MOUNT_ORIG" ] && make_loop_and_mount_original
+
+# # mount the original 2 (boot/root) somewhere to be modified
+[ "$OPT_MOUNT_COPY" ] && make_loop_and_mount_copy
+
+# # make read/write copy of original
+[ "$OPT_COPY_TO_COPY" ] && copy_original_to_copy
+
+# # insert the correct UUID into the rootfs fstab from those generated earlier
+[ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
+
+# # the resize script fails if the root partiion is not in position 2
+# so this needs to be copied into the copy image
+[ "$OPT_FIX_RESIZE_SCRIPT" ] && fix_resize_script
+
+# zip the copy of the rootfs for use in restoring
+[ "$OPT_MAKE_RECOVERY_ZIP" ] && output_zipped_copy_rootfs
+
+# going to use the lite image for the recovery partition
+[ "$OPT_MOUNT_LITE" ] && make_loop_and_mount_lite
+
+# calcule the required bytes and sectors for the restore p2 partition
+# from the recovery.zip plus the used space on the lite p2 partition
+[ "$OPT_GET_RECOVERY_SIZES" ] && get_recovery_root_part_size
+
+# use the values to create a restore img file and mount it
+[ "$OPT_MOUNT_RESTORE" ] && make_loop_and_mount_restore
+
+# copy the various source partiions into the restore image
+# mount the partitions for further editing
+[ "$OPT_COPY_TO_RESTORE" ] && copy_to_restore
+
+# edit the cmdline.txt file for correct partition
+[ "$OPT_FIX_CMDLINE_TXT" ] && overwrite_cmdline_for_boot
+
+# restore triggers the recovery from the running rpi
+[ "$OPT_MAKE_RESTORE_SCRIPT" ] && make_restore_script
+
+# recovery is triggered after reboot to restore partition
+[ "$OPT_MAKE_RECOVERY_SCRIPT" ] && make_recovery_script
+
+exit 0
+# 
+# copy_original_to_restore
+
+# overwrite_cmdline_for_boot
+
+# [ -z "${OPTION_DO_RESIZE}" ] || fix_resize_script
+
+# enable_rpi_serial_console
+
+# @TODO do we want to do this for both the rootfs and recovery.zip?
+fix_rootfs_fstab
+
+
+
+
+
+if [ ! -z "${OPTION_CLEANUP_POST}" ]; then
+  cleanup
+fi
+
+pr_header "finished"
+echo "BASE is $BASE.restore.img"
