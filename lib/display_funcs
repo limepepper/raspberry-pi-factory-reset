@@ -1,7 +1,37 @@
 #!/bin/bash
 
-
 # https://misc.flogisoft.com/bash/tip_colors_and_formatting
+
+usage()
+{
+cat << EOF
+usage: $0 options
+Library of display functions for bash
+OPTIONS:
+   -t     Run the test suite.
+
+EOF
+}
+
+OPT_TEST_SUITE=""
+
+if [ "${BASH_SOURCE[0]}" = "$0" ] ; then
+  while getopts “t” OPTION
+  do
+      case $OPTION in
+        t)
+            OPT_TEST_SUITE=1
+        ;;
+        ?)
+            usage
+            exit
+        ;;
+     esac
+  done
+  shift $((OPTIND-1))
+fi
+
+
 
 bufferstring=""
 ev()
@@ -14,59 +44,367 @@ ev()
 show_var()
 {
   varname="$1"
-  echo "$1=${!varname}"
+  echo "$1 : ${!varname}"
 }
 
 
 
 shellquote()
 {
-a="$1"
+  a="$1"
 
-#$a =~ s/[\n]/'\n'/go;
-#$a =~ s/[\002-\011\013-\032\\\#\?\`\(\)\{\}\[\]\^\*\<\=\>\~\|\; \"\!\$\&\'\202-\377]/\\$&/go;
-# quote newline as '\n'
-echo  "$a" | sed -r "s/[\n]/'\n'/g"
+  #$a =~ s/[\n]/'\n'/go;
+  #$a =~ s/[\002-\011\013-\032\\\#\?\`\(\)\{\}\[\]\^\*\<\=\>\~\|\; \"\!\$\&\'\202-\377]/\\$&/go;
+  # quote newline as '\n'
+  echo  "$a" | sed -r "s/[\n]/'\n'/g"
 }
 
-parse_tokens()
+repeat(){
+  [ "$#" -eq 2 ] || die "need 2 arguments"
+
+  # not works
+	# for i in {1..$2}; do echo -n "$1"; done
+  for i in `seq 1 $2`; do echo -n "$1"; done
+}
+
+pr_parse(){
+
+  local fgcolor=$1
+  local bgcolor=$2
+  local fill=$3
+  local line=$4
+
+  # echo "splitkv is \"${SPLITKV:=''}\""
+  # echo "splitkv is \"${SPLITKV}\""
+
+  if [ "${SPLITKV:=""}" ] ; then
+
+    line2="${!fgcolor}${!bgcolor}"
+    local pad1="$(repeat ' ' 18)"
+    line3="$(echo -n "$line" | awk -F':' '{ORS="" ; print $1}')"
+    line3="${line3}${pad1:${#line3}:${#pad1}}"
+    line2+="$line3"
+    line2+=" : "
+    line2+="${ORANGEFG}${!bgcolor}"
+    line2+="$(echo -n "$line" | awk -F':' '{ORS="" ; print $2}')"
+    line="$line2"
+
+    if [ "$fill" ] ; then
+      # echo "fill is $fill"
+      # echo "length is ${#line}"
+      # cols=$(tput cols)
+      cols=$fill
+      local pad="$(repeat ' ' $fill)"
+      echo -ne "${line}${pad:${#line}:${#pad}}"
+    else
+      printf "%s" "${line:0:120}"
+    fi
+    echo -en "${RESET}\n"
+
+  else
+
+      echo -en "${!fgcolor}${!bgcolor}"
+      if [ "$fill" ] ; then
+        # echo "fill is $fill"
+        # echo "length is ${#line}"
+        # cols=$(tput cols)
+        cols=$fill
+        local pad="$(repeat ' ' $fill)"
+        echo -ne "${line}${pad:${#line}:${#pad}}"
+      else
+        printf "%s" "${line:0:120}"
+      fi
+      echo -en "${RESET}\n"
+
+  fi
+}
+
+# this function takes either stdin or an arg containing a message to print
+# the first 3 parameters specify the formatting, and the remainder is passed
+# in as a message
+pr_input(){
+
+  local fgcolor=$1
+  local bgcolor=$2
+  local fill=$3
+  shift 3
+
+  # echo "args is $#"
+
+  [[ $# -gt 0 ]] && \
+  {
+    local lines="$@"
+    lines="$(echo -e $lines)"
+    local maxlength=0
+    local arrlines=()
+    IFS=$'\n'
+    for buffline in $lines; do 
+      # echo "line is $buffline"
+      arrlines+=("$buffline")
+      [ "${#buffline}" -gt ${maxlength} ] && maxlength=${#buffline}
+    done
+    unset IFS
+
+    [ $fill ] && fill=$maxlength
+
+    for tmpline in "${arrlines[@]}"; do
+      pr_parse $fgcolor $bgcolor "$fill" "$tmpline"
+    done
+
+  } || {
+
+    local maxlength=0
+    lines=()
+    while IFS= read -r line; do
+      # echo "x:$line"
+      lines+=("$line")
+      [ "${#line}" -gt ${maxlength} ] && maxlength=${#line}
+    done
+
+    [ $fill ] && fill=$maxlength
+
+    for tmpline in "${lines[@]}"; do
+       pr_parse $fgcolor $bgcolor "$fill" "$tmpline"
+    done
+
+  }
+}
+
+# messages formatted according to syslog severity
+pr_emerg(){   pr_input   REDFG    YELLOWBG   "1"   "$@"; }
+pr_alert(){   pr_input   REDFG    YELLOWBG   ""    "$@"; }
+pr_crit(){    pr_input   REDFG    YELLOWBG   "1"   "$@"; }
+pr_error(){   pr_input   REDFG    WHITEBG    ""    "$@"; }
+pr_warn(){    pr_input   GREEN    LGREYBG    ""    "$@"; echo ; }
+pr_notice(){  pr_input   GREEN    BLACKBG    ""    "$@"; }
+pr_info(){    pr_input   BLUEFG   BLACKBG    ""    "$@"; }
+pr_debug(){   pr_input   GREEN    BLACKBG    ""    "$@"; }
+
+# html style
+pr_header(){  pr_input   WHITEBFG    BLUEBG      ""    "$@" ; echo ; }
+pr_h1(){      pr_input   GREEN    BLACKBG     ""    "$@" ; }
+pr_h2(){      pr_input   WHITEBFG MAGENTABG   ""    "$@" ; }
+pr_h3(){      pr_input   GREEN    BLACKBG     ""    "$@" ; }
+pr_h4(){      pr_input   GREEN    BLACKBG     ""    "$@" ; }
+pr_h5(){      pr_input   GREEN    BLACKBG     ""    "$@" ; }
+pr_p(){       pr_input   GREEN    BLACKBG     ""    "$@" ; echo ; }
+
+pr_quote(){   pr_input   WHITEFG   LGREYBG  "1"   "$@" ; echo "" ; }
+pr_quote2(){  pr_input   BLACKFG   GREYBG  "1"    "$@" ; echo "" ; }
+pr_hl(){      pr_input   CYANFG    BLACKBG  "1"   "$@" ; }
+pr_red(){     pr_input   RED       BLACKBG  "1"   "$@" ; }
+pr_ok(){      pr_input   GREENBFG  LGREYBG   ""    "$@" ; }
+
+pr_section(){
+  local title=$1
+  shift
+  pr_info "============ START section $title ==========="
+  pr_input    CYANFG     BLACKBG    ""    "$@"; 
+  pr_info "============ END section $title ============="
+  echo ""
+}
+
+pr_kv(){
+  local SPLITKV=1
+  pr_input     GREEN       BLACKBG  "1" "$@"
+}
+
+# takes a
+pr_table(){  echo -e "$1" ; }
+
+printval()
 {
-a="$1"
+  msg=$1
+  char='='
 
-for K in "${!COLOR[@]}"; do
-    #echo $K --- ${COLOR[$K]};
-    a="$(echo "$a" | sed -r "s/[$]{1,1}\{$K\}/${COLOR[$K]}/g")"
-done
-
-echo "$a"
-
-#eval 'echo' "$a"
-
+  if [[ $(awk -F"${char}" '{print NF-1}' <<< "$msg") -eq 1 ]] ; then
+      #echo hee11
+      echo "${MAGENTAFG}${msg%%=*}${RESET}=${BLUE}${msg##*=}${RESET}"
+      #${stringZ#a*C}
+   #   echo hee
+  elif [[ "$msg" =~ ^vdvrergv$ ]] ;then
+    echo "${BLUEFG}${msg}${RESET}"
+    echo rgjerigo
+  elif [[ "joijij2" == "joijio"  ]] ;then
+    echo rgjerigo
+  else
+    echo "${YELLOWFB}${msg}${RESET}"
+  fi
 }
-# | sed -e 's/.*\bWARN.*/\x1b[7m&\x1b[0m/i' -e 's/.*\bERR.*/\x1b[93;41 m&\x1b[0m/i'
 
-
-pr_head()
-{
-    declare alert_header=""
-    [[ "$1" == "warn" ]] && \
-    alert_header=1
-
-  while read -r  line; do
-      # printf "%s" "$data"
-
-      if [[ $alert_header ]] ; then
-       echo -en "${RED}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-        else
-       parse_tokens "${line:0:80}"
-       fi
-
-  done
-# ansi chars line wrapping screws things up.
+pr_val(){
+  local varname=$1
+  echo "$varname     :   ${!varname}"
 }
+
+wasX=""
+[[ "$-" =~ 'x'  ]] && wasX=true && set +x
+
+##$ bash --version   # Must be at least version 4 to have associative arrays
+#GNU bash, version 4.2.24(1)-release (x86_64-pc-linux-gnu)
+
+# Define a few Colours
+    BLACKFG=$(tput setaf 0      2>/dev/null )
+    BLACKBG=$(tput setab 0      2>/dev/null  )
+
+    WHITEFG=$(tput setaf 7      2>/dev/null )
+   WHITEBFG=$(tput bold   2>/dev/null)$(tput setaf 7  2>/dev/null )    
+    WHITEBG=$(tput setab 7      2>/dev/null )
+      WHITE=$(tput setaf 7      2>/dev/null )
+        
+#       PINK=$(tput setaf 134    2>/dev/null )
+       PINK=$(tput setaf 207    2>/dev/null )
+        RED=$(tput setaf 1      2>/dev/null )       
+      REDFG=$(tput setaf 1      2>/dev/null )
+      REDBG=$(tput setab 1      2>/dev/null )
+
+      GREEN=$(tput setaf 2      2>/dev/null )
+    GREENFG=$(tput setaf 2      2>/dev/null )
+    GREENBG=$(tput setab 2      2>/dev/null )
+   GREENBFG=$(tput bold   2>/dev/null)$(tput setaf 2      2>/dev/null )
+    
+
+   YELLOWFG=$(tput setaf 226    2>/dev/null )
+   YELLOWBG=$(tput setab 226    2>/dev/null )
+
+       BLUE=$(tput setaf 4      2>/dev/null )
+     BLUEFG=$(tput setaf 4      2>/dev/null )
+     BLUEBG=$(tput setab 4      2>/dev/null )
+
+  MAGENTAFG=$(tput setaf 5      2>/dev/null )
+  MAGENTABG=$(tput setab 5      2>/dev/null )
+
+     CYANFG=$(tput setaf 6      2>/dev/null )
+     CYANBG=$(tput setab 6      2>/dev/null )
+
+     PURPLE=$(tput setaf 8      2>/dev/null )
+  DEFAULTFG=$(tput setaf 9      2>/dev/null )
+  DEFAULTBG=$(tput setab 9      2>/dev/null )
+    PURPLE2=$(tput setaf 125    2>/dev/null )
+
+     GREYBG=$(tput setab 8      2>/dev/null )
+    LGREYBG=$(tput setab 237     2>/dev/null )
+
+   ORANGEFG=$(tput setaf 3      2>/dev/null )    
+   ORANGEBG=$(tput setab 3      2>/dev/null )
+   
+
+      BLINK=$(tput blink        2>/dev/null )
+    REVERSE=$(tput smso         2>/dev/null )
+  UNDERLINE=$(tput smul         2>/dev/null )
+
+LIME_YELLOW=$(tput setaf 190    2>/dev/null )
+POWDER_BLUE=$(tput setaf 153    2>/dev/null )
+      RESET=$(tput sgr0         2>/dev/null )
+
+# declare -A COLOR
+#     COLOR[BLACKFG]=${BLACKFG}
+#     COLOR[WHITEFG]=${WHITEFG}
+#   COLOR[DEFAULTFG]=${DEFAULTFG}
+#   COLOR[DEFAULTBG]=${DEFAULTBG}
+# COLOR[POWDER_BLUE]=${POWDER_BLUE}
+#      COLOR[CYANFG]=${CYANFG}
+#      COLOR[CYANBG]=${CYANBG}
+#     COLOR[GREENFG]=${GREENFG}
+#     COLOR[GREENBG]=${GREENBG}
+#      COLOR[BLUEFG]=${BLUEFG}
+#      COLOR[BLUEBG]=${BLUEBG}
+#    COLOR[YELLOWFG]=${YELLOWFG}
+#    COLOR[YELLOWBG]=${YELLOWBG}
+#        COLOR[PINK]=${PINK}
+#       COLOR[RESET]=${RESET}
+#       COLOR[REDFG]=${REDFG}
+#       COLOR[REDBG]=${REDBG}
+
+[[ -n "${wasX}" ]] && set -x
+unset wasX
+
+
+if [ "$OPT_TEST_SUITE" ] ; then
+
+  set -eu -p pipefail
+
+  echo "executing test suite for display_funcs"
+
+  echo "This is text piped to pr_header" | pr_header
+
+  pr_header "This is pr_header as an arg"
+
+  echo "this is h1 piped to pr_h1 - some more text" | pr_h1
+  echo "this is h2 piped to pr_h2" | pr_h2
+  echo "this is h3 piped to pr_h3" | pr_h3
+  echo "this is h4 piped to pr_h4" | pr_h4
+  echo "this is h5 piped to pr_h5" | pr_h5
+  echo "this is p  piped to pr_p" | pr_p
+
+  pr_h1 "this is pr_h1 as an arg"
+
+  echo "another ewijewof " | pr_quote
+
+  pr_h1 "this is a h1 message as an arg"
+
+cat << EOF | pr_quote
+<?xml version="1.0"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+<xsl:template match="/"><xsl:value-of select="/project/version"/></xsl:template>
+</xsl:stylesheet>
+EOF
+
+
+pr_info "attempt to pass a multine arg to pr_quote"
+
+pr_quote '<?xml version="1.0"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+<xsl:template match="/"><xsl:value-of select="/project/version"/></xsl:template>
+</xsl:stylesheet>'
+
+  pr_h1 "this is a crit message as an arg"
+
+cat << EOF | pr_crit
+<?xml version="1.0"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+<xsl:template match="/"><xsl:value-of select="/project/version"/></xsl:template>
+</xsl:stylesheet>
+EOF
+
+echo "oijgoierj iogjreio gjreoigj oriegj ojrgio er" | pr_header warn
+
+
+# ls /etc/resolv.conf not_exists  > >(pr_quote) 2> >(pr_quote2)
+
+cat << EOF | pr_crit
+e2fsck 1.45.6 (20-Mar-2020)
+Pass 1: Checking inodes, blocks, and sizes
+Pass 2: Checking directory structure
+Pass 3: Checking directory connectivity
+Pass 4: Checking reference counts
+Pass 5: Checking group summary information
+
+       44957 inodes used (45.91%, out of 97920)
+         129 non-contiguous files (0.3%)
+          29 non-contiguous directories (0.1%)
+             # of inodes with ind/dind/tind blocks: 0/0/0
+             Extent depth histogram: 39121/1
+      295831 blocks used (75.63%, out of 391168)
+           0 bad blocks
+           1 large file
+
+       34523 regular files
+        4495 directories
+           8 character device files
+           0 block device files
+           0 fifos
+         479 links
+        5922 symbolic links (5819 fast symbolic links)
+           0 sockets
+------------
+       45427 files
+EOF
+
+fi
+
+
+
 
 
 # | sed -e 's/.*\bWARN.*/\x1b[7m&\x1b[0m/i' -e 's/.*\bERR.*/\x1b[93;41 m&\x1b[0m/i'
@@ -89,303 +427,3 @@ pr_head()
 # \e
 # \033
 # \x1B
-
-
-pr_header()
-{
-
-  [[ $# -gt 0 ]] && \
-  {
-    line="$@"
-      echo ""
-       echo -en "${WHITE}${BLUEBG}"
-       printf "%s" "${line:0:100}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${PINK}"
-       printf "%s" "${line:0:100}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-}
-
-
-
-pr_warn()
-{
-
-  [[ $# -gt 0 ]] && \
-  {
-    line=$1
-
-       echo -en "${PINK}"
-       printf "%s" "${line:0:120}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${PINK}"
-       printf "%s" "${line:0:120}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-}
-
-
-pr_ok()
-{
-
-  [[ $# -gt 0 ]] && \
-  {
-    line=$1
-
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-}
-
-
-pr_h1()
-{
-
-  [[ $# -gt 0 ]] && \
-  {
-    line=$1
-
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-}
-
-# similar to a h2 tag in html
-pr_h2()
-{
-
-  [[ $# -gt 0 ]] && \
-  {
-    line=$1
-
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-}
-
-
-# similar to a <p> tag in html
-pr_p()
-{
-
-  [[ $# -gt 0 ]] && \
-  {
-    line=$1
-
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${GREEN}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-}
-
-
-pr_section(){
-
-  [[ $# -gt 0 ]] && \
-  {
-    line=$1
-
-       echo -en "${CYANFG}"
-       printf "%s" "${line:0:120}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${CYANFG}"
-       printf "%s" "${line:0:120}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-
-}
-
-pr_alert()
-{
-
-  [[ $# -gt 0 ]] && \
-  {
-    line=$1
-
-       echo -en "${RED}${MAGENTABG}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-
-  } || \
-  {
-  while read -r  line; do
-      # printf "%s" "$data"
-       echo -en "${RED}"
-       printf "%s" "${line:0:80}"
-       echo -en "${RESET}"
-       echo
-  done
-
-  }
-# ansi chars line wrapping screws things up.
-}
-
-# takes a
-pr_table()
-{
-echo -e "$1"
-
-}
-
-printval()
-{
-  msg=$1
-  char='='
-
-  if [[ $(awk -F"${char}" '{print NF-1}' <<< "$msg") -eq 1 ]] ; then
-  #echo hee11
-      echo "${MAGENTAFG}${msg%%=*}${RESET}=${BLUE}${msg##*=}${RESET}"
-      #${stringZ#a*C}
-   #   echo hee
-  elif [[ "$msg" =~ ^vdvrergv$ ]] ;then
-      echo "${BLUEFG}${msg}${RESET}"
-  echo rgjerigo
-  elif [[ "joijij2" == "joijio"  ]] ;then
-echo rgjerigo
-  else
-   echo "${YELLOWFB}${msg}${RESET}"
-  fi
-}
-
-wasX=""
-[[ "$-" =~ 'x'  ]] && wasX=true && set +x
-
-##$ bash --version   # Must be at least version 4 to have associative arrays
-#GNU bash, version 4.2.24(1)-release (x86_64-pc-linux-gnu)
-
-# Define a few Colours
-    BLACKFG=$(tput setaf 0  2>/dev/null )
-    BLACKBG=$(tput setab 0  2>/dev/null  )
-        RED=$(tput setaf 1    2>/dev/null )
-       PINK=$(tput setaf 134   2>/dev/null )
-      REDFG=$(tput setaf 1   2>/dev/null )
-      REDBG=$(tput setab 1  2>/dev/null )
-      GREEN=$(tput setaf 2  2>/dev/null )
-    GREENFG=$(tput setaf 2  2>/dev/null )
-    GREENBG=$(tput setab 2  2>/dev/null )
-   YELLOWFG=$(tput setaf 3  2>/dev/null )
-   YELLOWBG=$(tput setab 3  2>/dev/null )
-       BLUE=$(tput setaf 4   2>/dev/null )
-     BLUEFG=$(tput setaf 4  2>/dev/null )
-     BLUEBG=$(tput setab 4   2>/dev/null )
-  MAGENTAFG=$(tput setaf 5   2>/dev/null )
-  MAGENTABG=$(tput setab 5   2>/dev/null )
-     CYANFG=$(tput setaf 6  2>/dev/null )
-     CYANBG=$(tput setab 6    2>/dev/null )
-      WHITE=$(tput setaf 7   2>/dev/null )
-    WHITEFG=$(tput setaf 7   2>/dev/null )
-    WHITEBG=$(tput setab 7  2>/dev/null )
-     PURPLE=$(tput setaf 8  2>/dev/null )
-  DEFAULTFG=$(tput setaf 9  2>/dev/null )
-  DEFAULTBG=$(tput setab 9  2>/dev/null )
-    PURPLE2=$(tput setaf 125  2>/dev/null )
-      BLINK=$(tput blink  2>/dev/null )
-    REVERSE=$(tput smso   2>/dev/null )
-  UNDERLINE=$(tput smul  2>/dev/null )
-LIME_YELLOW=$(tput setaf 190  2>/dev/null )
-POWDER_BLUE=$(tput setaf 153  2>/dev/null )
-      RESET=$(tput sgr0  2>/dev/null )
-
-declare -A COLOR
-    COLOR[BLACKFG]=${BLACKFG}
-    COLOR[WHITEFG]=${WHITEFG}
-  COLOR[DEFAULTFG]=${DEFAULTFG}
-  COLOR[DEFAULTBG]=${DEFAULTBG}
-COLOR[POWDER_BLUE]=${POWDER_BLUE}
-     COLOR[CYANFG]=${CYANFG}
-     COLOR[CYANBG]=${CYANBG}
-    COLOR[GREENFG]=${GREENFG}
-    COLOR[GREENBG]=${GREENBG}
-     COLOR[BLUEFG]=${BLUEFG}
-     COLOR[BLUEBG]=${BLUEBG}
-   COLOR[YELLOWFG]=${YELLOWFG}
-   COLOR[YELLOWBG]=${YELLOWBG}
-       COLOR[PINK]=${PINK}
-      COLOR[RESET]=${RESET}
-      COLOR[REDFG]=${REDFG}
-      COLOR[REDBG]=${REDBG}
-
-
-
-[[ -n "${wasX}" ]] && set -x
-unset wasX

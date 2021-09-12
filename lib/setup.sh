@@ -3,7 +3,8 @@
 # DEFAULT_BASE=2018-03-13-raspbian-stretch-lite
 # DEFAULT_BASE=2018-06-27-raspbian-stretch-lite
 # DEFAULT_BASE=2018-10-09-raspbian-stretch-lite
-DEFAULT_BASE=2021-05-07-raspios-buster-armhf
+DEFAULT_BASE=2021-05-07-raspios-buster-armhf-lite
+DEFAULT_LITE=2021-05-07-raspios-buster-armhf-lite
 
 BASE=${OPTION_BASE:-$DEFAULT_BASE}
 
@@ -11,18 +12,20 @@ BASE=${OPTION_BASE:-$DEFAULT_BASE}
 BASE="$(basename $BASE)"
 BASE="${BASE%.img}"
 
-LITE="${BASE}-lite"
+LITE=${OPTION_LITE:-$DEFAULT_LITE}
+LITE="$(basename $LITE)"
+LITE="${LITE%.img}"
 
-echo $BASE
-echo $LITE
+# echo $BASE
+# echo $LITE
 
-echo "base DIR is ${DIR}"
+# echo "base DIR is ${DIR}"
 
 # paths for base, intermediate and restore images
 
 # this is the source
 IMG_ORIG="${DIR}/${BASE}.img"
-IMG_ORIG_LITE="${DIR}/${BASE}-lite.img"
+IMG_LITE="${DIR}/${LITE}.img"
 
 # this is working copy of the original, will be modified and copied again
 IMG_COPY="${DIR}/${BASE}.copy.img"
@@ -48,3 +51,5 @@ SECTOR_BYTES=512
 OPTION_DO_RESIZE=1
 
 SECTOR_SIZE=512
+
+VERBOSITY=2

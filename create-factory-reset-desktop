@@ -10,7 +10,6 @@ source "$DIR/lib/usage.sh"
 source "$DIR/lib/setup.sh"
 source "$DIR/lib/utils.sh"
 source "$DIR/lib/stages.sh"
-source "$DIR/lib/checks.sh"
 
 show_setup_var_summary
 
@@ -24,22 +23,22 @@ if [ "$OPT_DO_CHECKS" ] ; then
   check_sources
 fi
 
-# populate the vars for the start and size in bytes for original
+# extract the partition start/sizes for the source image
 [ "$OPT_GET_PART_FOR_ORIG" ] && get_partitions_for_original
 
-# if a lite image is provided, get the start and size in bytes
+# extract start/sizes for lite image (if used)
 [ "$OPT_GET_PART_FOR_LITE" ] && get_partitions_for_lite
 
-# # to avoid conflicts, generate uuids for boot, recovery, root partions
+# to avoid conflicts, generate uuids for boot, recovery, root partions
 [ "$OPT_MAKE_UUIDS" ] && make_uuids
 
-# # mount the boot and root partiions of source img to loopback devices
+# mount the boot and root partiions of source img to loopback devices
 [ "$OPT_MOUNT_ORIG" ] && make_loop_and_mount_original
 
-# # mount the original 2 (boot/root) somewhere to be modified
+# make a writable copy of the source and mount it
 [ "$OPT_MOUNT_COPY" ] && make_loop_and_mount_copy
 
-# # make read/write copy of original
+# copy the partitions from the source into the writable copy
 [ "$OPT_COPY_TO_COPY" ] && copy_original_to_copy
 
 # # insert the correct UUID into the rootfs fstab from those generated earlier
@@ -75,26 +74,13 @@ fi
 # recovery is triggered after reboot to restore partition
 [ "$OPT_MAKE_RECOVERY_SCRIPT" ] && make_recovery_script
 
-exit 0
-# 
-# copy_original_to_restore
-
-# overwrite_cmdline_for_boot
-
-# [ -z "${OPTION_DO_RESIZE}" ] || fix_resize_script
+get_postbuild_summary
 
 # enable_rpi_serial_console
 
-# @TODO do we want to do this for both the rootfs and recovery.zip?
-fix_rootfs_fstab
-
-
-
-
-
-if [ ! -z "${OPTION_CLEANUP_POST}" ]; then
+if [ "${OPTION_CLEANUP_POST}" ]; then
   cleanup
 fi
 
 pr_header "finished"
-echo "BASE is $BASE.restore.img"
+pr_info "RESTORE image is $BASE.restore.img"
