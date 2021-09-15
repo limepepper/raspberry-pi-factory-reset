@@ -18,6 +18,8 @@ Basic usage is to run the following command from the image:
 
     root@raspberrypi:~# /boot/factory_reset --reset
 
+:exclamation: Warning. This will delete all data from the rPi :exclamation:    
+
 The factory reset causes the rPi to reboot to a recovery partition, upon which
 it restores the original root partition, and then reboots back to the fresh
 installation.
