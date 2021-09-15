@@ -1,103 +1,91 @@
 #!/bin/bash
 
 # fail on errors, undefined variables, and errors in pipes
-set -eu
-set -o pipefail
+set -eu -o pipefail
 
-usage()
-{
-cat << EOF
-usage: $0 options
-This script is run to create a Pi OS image with factory reset utility
-OPTIONS:
-   -h     Show this message
-   -i     source image, from downloads.raspberrypi.org, unzipped (optional)
-          this file should exist in the current directory
-          if not provided this will default to 2021-01-11-raspios-buster-armhf-lite.img
-   -s     process in steps, outputting useful information and waiting for
-          user to confirm before proceeding
-   -r     do a cleanup and exit
-EOF
-}
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-OPTION_CLEANUP_PRE="1"
-OPTION_CLEANUP_POST="1"
-OPTION_BASE=""
-OPTION_STEPS=""
-OPTION_DO_MAIN=1
+source "$DIR/lib/display_funcs"
+source "$DIR/lib/usage.sh"
+source "$DIR/lib/setup.sh"
+source "$DIR/lib/utils.sh"
+source "$DIR/lib/stages.sh"
 
-while getopts “rhcesi:p:v” OPTION
-do
-     case $OPTION in
-         h)
-            echo "in help"
-             usage
-             exit 1
-             ;;
-         c)
-             # vvv=$OPTARG
-             OPTION_CLEANUP_PRE=1
-            ;;
-         e)
-             # vvv=$OPTARG
-             OPTION_CLEANUP_POST=0
-            ;;
-         s)
-             # vvv=$OPTARG
-             OPTION_STEPS=1
-            ;;
-         i)
-             # vvv=$OPTARG
-             OPTION_BASE=${OPTARG}
-            ;;
-         r)
-             # vvv=$OPTARG
-             OPTION_CLEANUP_PRE=1
-             OPTION_DO_MAIN=""
-             OPTION_CLEANUP_POST=""
-            ;;
-         ?)
-            echo "in usage"
-             usage
-             exit
-             ;;
-     esac
-done
+show_setup_var_summary
 
-shift $((OPTIND-1))
-
-# get current source dir, even if its hidden in links
-# needed for full paths relative to this script
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
-  SOURCE="$(readlink "$SOURCE")"
-  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-done
-DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
-
-source ./lib/display_funcs
-source ./lib/setup.sh
-source ./lib/utils.sh
-
-echo "OPTION_BASE is ${OPTION_BASE}"
-echo "BASE is $BASE"
-
+# this is to cleanup any previous runs that didn't run cleanup at the end
 if [ ! -z "${OPTION_CLEANUP_PRE}" ]; then
   cleanup
 fi
 
-check_prerequisites
-check_sources
-check_distribution
+if [ "$OPT_DO_CHECKS" ] ; then
+  check_prerequisites
+  check_sources
+fi
 
-echo "OPTION_DO_MAIN $OPTION_DO_MAIN"
+# extract the partition start/sizes for the source image
+# these are needed to create the copy of the original
+[ "$OPT_GET_PART_FOR_ORIG" ] && get_partitions_for_original
 
-[ -z "${OPTION_DO_MAIN}" ] || main
+# extract start/sizes for lite image (if used)
+# we need the size of the root partition from the lite image
+[ "$OPT_GET_PART_FOR_LITE" ] && get_partitions_for_lite
 
-if [ ! -z "${OPTION_CLEANUP_POST}" ]; then
+# to avoid conflicts, generate uuids for boot, recovery, root partions
+# @TODO not sure if this is actually needed.. to validate...
+[ "$OPT_MAKE_UUIDS" ] && make_uuids
+
+# mount the boot and root partiions of source img to loopback devices
+[ "$OPT_MOUNT_ORIG" ] && make_loop_and_mount_original
+
+# make a writable copy of the source image and mount it
+[ "$OPT_MOUNT_COPY" ] && make_loop_and_mount_copy
+
+# copy the partitions from the source into the writable copy
+[ "$OPT_COPY_TO_COPY" ] && copy_original_to_copy
+
+# insert the generated UUID into the rootfs fstab from those generated earlier
+[ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
+
+# the resize script fails if the root partiion is not in position 2
+# so this needs to be copied into the copy image
+# @TODO not sure if this is still needed, as the current script checks the 
+# partition number of the root partition.
+[ "$OPT_FIX_RESIZE_SCRIPT" ] && fix_resize_script
+
+# zip the copy of the rootfs for use in restoring
+[ "$OPT_MAKE_RECOVERY_ZIP" ] && output_zipped_copy_rootfs
+
+# going to use the lite image for the recovery partition
+[ "$OPT_MOUNT_LITE" ] && make_loop_and_mount_lite
+
+# calcule the required bytes and sectors for the restore p2 partition
+# from the recovery.zip plus the used space on the lite p2 partition
+[ "$OPT_GET_RECOVERY_SIZES" ] && get_recovery_root_part_size
+
+# use the values to create a restore img file and mount it
+[ "$OPT_MOUNT_RESTORE" ] && make_loop_and_mount_restore
+
+# copy the various source partiions into the restore image
+# mount the partitions for further editing
+[ "$OPT_COPY_TO_RESTORE" ] && copy_to_restore
+
+# edit the cmdline.txt file for correct partition
+[ "$OPT_FIX_CMDLINE_TXT" ] && overwrite_cmdline_for_boot
+
+# restore triggers the recovery from the running rpi
+[ "$OPT_MAKE_RESTORE_SCRIPT" ] && make_restore_script
+
+# recovery is triggered after reboot to restore partition
+[ "$OPT_MAKE_RECOVERY_SCRIPT" ] && make_recovery_script
+
+[ "$OPT_POST_SUMMARY" ] && get_postbuild_summary
+
+# enable_rpi_serial_console
+
+if [ "${OPTION_CLEANUP_POST}" ]; then
   cleanup
 fi
 
 pr_header "finished"
-echo "BASE is $BASE.restore.img"
+pr_info "RESTORE image is $BASE.restore.img"
