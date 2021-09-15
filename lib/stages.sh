@@ -764,12 +764,16 @@ echo "factory restore script"
   # mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs
   # cat /mnt/recoveryfs/etc/fstab
 
-  umount -f /mnt/recoveryfs
-  echo ""
+  # umount -f /mnt/recoveryfs
+  # echo ""
 
   echo "show current cmdline.txt"
   cat /boot/cmdline.txt
   echo ""
+
+  [[ "\$2" == "--copy-pi-password" ]] && {
+    cat /etc/shadow | egrep '^pi' | awk -F: '{print \$2}' > /boot/restore_pi_pass
+  }
 
   echo "rebooting..."
   reboot

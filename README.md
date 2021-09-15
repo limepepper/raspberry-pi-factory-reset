@@ -1,30 +1,39 @@
 # Raspbian / Pi OS factory reset images
 
+:warning: Factory-resetting will delete any data off the root partition during
+restoration.
+
 ## Description
 
 If you regularly need to reset or restore a Raspberry Pi, it can become a bit
 annoying to have to power down the rPi, unplug the sdcard, and re-flash the
-original image back again. Not to mention it causes mechanical stress to the device
-and requires physical access to the rPi.
+original image back again. Not to mention it causes mechanical stress to the 
+sdcard slot and requires physical access to the rPi.
 
-This repo contains a script which can be used to create a Pi OS/raspian image
-which has a `/boot/factory_reset` utility which can be used to reset the pi
-remotely over ssh back to the pristine installation state.
+This project creates images that contain a `/boot/factory_reset` utility which 
+can be used to reset the pi remotely over ssh back to the pristine installation 
+state.
+
+Basic usage is to run the following command from the image:
+
+    root@raspberrypi:~# /boot/factory_reset --reset
 
 The factory reset causes the rPi to reboot to a recovery partition, upon which
 it restores the original root partition, and then reboots back to the fresh
 installation.
 
-## Usage
-
-:warning: Factory-resetting will delete any data off the root partition during
-restoration.
-
 ### Ready to use images
 
 These Pi OS/raspbian images can be directly flashed and run:
 
-https://github.com/limepepper/raspberry-pi-factory-reset/releases
+https://github.com/limepepper/raspberry-pi-factory-reset/wiki/Downloads
+
+
+## Usage
+
+
+
+
 
 ### Building your own image
 

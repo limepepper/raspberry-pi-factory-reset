@@ -147,6 +147,21 @@ UUID=${P3_UUID}  /               ext4    defaults,noatime  0       1
 #   use  dphys-swapfile swap[on|off]  for that
 EOF
 
+  if [ -f /boot/restore_pi_pass ] ; then
+    echo "copying old pi password into new rootfs"
+    pi_pass="$(cat /boot/restore_pi_pass)"
+    usermod -R /mnt/rootfs -p "$pi_pass" pi
+    rm -f /boot/restore_pi_pass
+  fi
+
+  if [ -f /boot/restore_root_pass ] ; then
+    echo "copying old root password into new rootfs"
+    root_pass="$(cat /boot/restore_root_pass)"
+    usermod -R /mnt/rootfs -p "$root_pass" root
+    rm -f /boot/restore_root_pass
+  fi
+  
+
   touch /boot/ssh
 
   echo "show filesystem size"
