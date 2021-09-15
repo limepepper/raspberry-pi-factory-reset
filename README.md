@@ -28,12 +28,14 @@ These Pi OS/raspbian images can be directly flashed and run:
 
 https://github.com/limepepper/raspberry-pi-factory-reset/wiki/Downloads
 
+#### Note on image sizes
+
+These zipped images contain a copy of the original root partition, a pristine
+copy of the rootfs, and a recovery partition. So they are at least 2 times the
+original size.
+
 
 ## Usage
-
-
-
-
 
 ### Building your own image
 
