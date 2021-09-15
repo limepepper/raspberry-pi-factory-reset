@@ -190,7 +190,7 @@ function make_loop_and_mount_original(){
 
 function make_loop_and_mount_copy(){
 
-  pr_header "make img copy and mount it"
+  pr_header "make img copy and mount it on loopback device"
 
   get_bytes_to_contain_partition ${ORIG_P2_START} ${ORIG_P2_SIZE}
 
@@ -261,7 +261,7 @@ EOF
 
 function copy_original_to_copy(){
 
-  pr_header "3.4 copy the filesystem partitions to the copy img"
+  pr_header "copy the filesystem partitions to the copy img"
 
   dd if=${LOOP_ORIG}p1 of=${LOOP_COPY}p1 bs=4M
   dd if=${LOOP_ORIG}p2 of=${LOOP_COPY}p2 bs=4M
@@ -296,6 +296,10 @@ function copy_original_to_copy(){
 
   pr_h3 "list partitions of LOOP_COPY"
   fdisk -l ${LOOP_COPY} | pr_quote
+
+
+
+  pr_header "mount the img copy loopback device on mnt/copy_rootfs"
 
   mkdir -p mnt/copy_rootfs
 

@@ -1,7 +1,7 @@
 # Raspbian / Pi OS factory reset images
 
 :warning: Factory-resetting will delete any data off the root partition during
-restoration.
+restoration. :warning: 
 
 ## Description
 

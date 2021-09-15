@@ -24,28 +24,33 @@ if [ "$OPT_DO_CHECKS" ] ; then
 fi
 
 # extract the partition start/sizes for the source image
+# these are needed to create the copy of the original
 [ "$OPT_GET_PART_FOR_ORIG" ] && get_partitions_for_original
 
 # extract start/sizes for lite image (if used)
+# we need the size of the root partition from the lite image
 [ "$OPT_GET_PART_FOR_LITE" ] && get_partitions_for_lite
 
 # to avoid conflicts, generate uuids for boot, recovery, root partions
+# @TODO not sure if this is actually needed.. to validate...
 [ "$OPT_MAKE_UUIDS" ] && make_uuids
 
 # mount the boot and root partiions of source img to loopback devices
 [ "$OPT_MOUNT_ORIG" ] && make_loop_and_mount_original
 
-# make a writable copy of the source and mount it
+# make a writable copy of the source image and mount it
 [ "$OPT_MOUNT_COPY" ] && make_loop_and_mount_copy
 
 # copy the partitions from the source into the writable copy
 [ "$OPT_COPY_TO_COPY" ] && copy_original_to_copy
 
-# # insert the correct UUID into the rootfs fstab from those generated earlier
+# insert the generated UUID into the rootfs fstab from those generated earlier
 [ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
 
-# # the resize script fails if the root partiion is not in position 2
+# the resize script fails if the root partiion is not in position 2
 # so this needs to be copied into the copy image
+# @TODO not sure if this is still needed, as the current script checks the 
+# partition number of the root partition.
 [ "$OPT_FIX_RESIZE_SCRIPT" ] && fix_resize_script
 
 # zip the copy of the rootfs for use in restoring
@@ -74,7 +79,7 @@ fi
 # recovery is triggered after reboot to restore partition
 [ "$OPT_MAKE_RECOVERY_SCRIPT" ] && make_recovery_script
 
-get_postbuild_summary
+[ "$OPT_POST_SUMMARY" ] && get_postbuild_summary
 
 # enable_rpi_serial_console
 

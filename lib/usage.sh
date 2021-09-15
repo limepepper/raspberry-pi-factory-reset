@@ -7,6 +7,9 @@ cat << EOF
 usage: $0 options
 This script is run to create a Pi OS image with factory reset utility
 OPTIONS:
+   -a     Run all the steps. Generally you want this unless you are debugging
+          some failure somewhere. use with -s for confirmation at each step
+
    -i     The source image.
           This should be an unzipped filesystem image with 2 partitions:
           /boot : following rPi standards, such as having a /boot/cmdline.txt
@@ -62,6 +65,8 @@ OPT_FIX_CMDLINE_TXT=""
 OPT_MAKE_RESTORE_SCRIPT=""
 OPT_MAKE_RECOVERY_SCRIPT=""
 
+OPT_POST_SUMMARY=""
+
 while getopts “arhcsi:l:p:ve” OPTION
 do
      case $OPTION in
@@ -94,13 +99,14 @@ do
             OPT_GET_PART_FOR_LITE="1"
             OPT_MOUNT_LITE="1"
 
+            OPT_POST_SUMMARY="1"
+
             OPTION_CLEANUP_POST="1"
 
           ;;
          c)
              # vvv=$OPTARG
              OPTION_CLEANUP_PRE=1
-             OPTION_DO_MAIN=""
              OPTION_CLEANUP_POST=""
           ;;
          e)
