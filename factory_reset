@@ -2,11 +2,18 @@
 
 set -eu -o pipefail
 
+if [[ $(/usr/bin/id -u) -ne 0 ]]; then
+  echo "This needs to run as root"
+  exit 99
+fi
+
 OPT_RESET=""
 OPT_COPY_PI_PASS=""
 OPT_COPY_ROOT_PASS=""
 OPT_COPY_WIFI=""
 OPT_DEBUG=""
+OPT_BOOT_RECOVERY=""
+OPT_BOOT_ROOT=""
 
 usage()
 {
@@ -17,6 +24,7 @@ Calling this script causes the rPi to reboot and factory reset. All data is lost
 OPTIONS:
    --reset                set this option to proceed with reset,
                           otherwise script will exit and do nothing
+                          (mutually exclusive with --boot-to-recovery )
 
    --copy-pi-password     during the reset, preserve the pi user password
 
@@ -24,9 +32,18 @@ OPTIONS:
 
    --copy-wifi            preserve the current wifi settings
 
-   --debug                output a lot of messages which indicate what is 
+   --copy-all             preserve pi, root and wifi settings
+
+ADVANCED OPTIONS:
+
+   --debug                output a lot of messages which indicate what is
                           happening during the process
 
+   --boot-to-recovery     don't initiate reest, just reboot into the recovery
+                          partition (mutually exclusive with --reset)
+
+   --boot-to-rootfs       boot back to rootfs (without reset)
+                          this only makes any sense when in recovery
 EOF
 }
 
@@ -52,6 +69,24 @@ do
       OPT_COPY_WIFI=1
     ;;
 
+    --copy-all)
+      OPT_COPY_PI_PASS=1
+      OPT_COPY_ROOT_PASS=1
+      OPT_COPY_WIFI=1
+    ;;
+
+    --debug)
+      OPT_DEBUG=1
+    ;;
+
+    --boot-to-recovery)
+      OPT_BOOT_RECOVERY=1
+    ;;
+
+    --boot-to-root)
+      OPT_BOOT_ROOT=1
+    ;;
+
     *)
     echo “unrecognised option: $ARG”
     echo
@@ -61,19 +96,61 @@ do
   esac
 done
 
-if [ ! "${OPT_RESET}" ] ; then
+if [ "${OPT_RESET}" -a "${OPT_BOOT_RECOVERY}" ] ; then
+    echo "only set one of --boot-to-recovery and --reset"
+    echo
+    usage
+    exit 1
+fi
+
+if [ ! "${OPT_RESET}" ] && [ ! "${OPT_BOOT_RECOVERY}" ] &&
+  [ ! "${OPT_BOOT_ROOT}" ] ; then
+    echo "set one of --boot-to-recovery and --reset"
+    echo
     usage
     exit 1
 fi
 
 echo "factory restore script - resetting"
 
-if [[ $(/usr/bin/id -u) -ne 0 ]]; then
-  echo "This needs to run as root"
-  exit 99
+sleep 2
+
+if [ "${OPT_BOOT_RECOVERY}" ] ; then
+  echo "booting to recovery"
+
+  cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
+
+  sed -i "s/XXXYYYXXX/$(blkid -o export  \
+        /dev/disk/by-label/recoveryfs | \
+          egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
+
+  sed -i "s/init=[^[:space:]]*//g"  /boot/cmdline.txt
+
+  cat /boot/cmdline.txt
+  echo "rebooting in 10..."
+  sleep 10
+  touch /boot/ssh
+  reboot
+
+  exit 0
 fi
 
-sleep 2
+if [ "${OPT_BOOT_ROOT}" ] ; then
+  echo "booting to rootfs"
+
+  ROOTPARTUUID="$(blkid -s PARTUUID -o value /dev/disk/by-label/rootfs)"
+  sed -i "s/root=[^[:space:]]*/root=PARTUUID=${ROOTPARTUUID}/"  /boot/cmdline.txt
+  sed -i "s/init=[^[:space:]]*//"  /boot/cmdline.txt
+
+  cat /boot/cmdline.txt
+  echo "rebooting in 10..."
+  sleep 10
+  reboot
+
+  exit 0
+fi
+
+
 
 echo "show original cmdline.txt"
 cat /boot/cmdline.txt
