@@ -1,4 +1,4 @@
-# Raspbian / Pi OS factory reset images
+# Factory reset your Pi
 
 :warning: Factory-resetting will delete any data off the root partition during
 restoration. :warning: 
@@ -7,18 +7,36 @@ restoration. :warning:
 
 If you regularly need to reset or restore a Raspberry Pi, it can become a bit
 annoying to have to power down the rPi, unplug the sdcard, and re-flash the
-original image back again. Not to mention it causes mechanical stress to the 
-sdcard slot and requires physical access to the rPi.
+original image back again.
 
-This project creates images that contain a `/boot/factory_reset` utility which 
-can be used to reset the pi remotely over ssh back to the pristine installation 
-state.
+This project creates images that contain a `/boot/factory_reset` utility and a 
+recovery partition containing a pristine image, which can be reset remotely 
+with a single command.
 
-Basic usage is to run the following command from the image:
+The most basic usage is to run the following command from the image:
 
     root@raspberrypi:~# /boot/factory_reset --reset
 
-:exclamation: Warning. This will delete all data from the rPi :exclamation:    
+It support some other options to preserve various settings
+
+    root@raspberrypi:~# /boot/factory_reset
+    usage: /boot/factory_reset options
+    Calling this script causes the rPi to reboot and factory reset. All data is lost
+
+    OPTIONS:
+      --reset                set this option to proceed with reset,
+                              otherwise script will exit and do nothing
+
+      --copy-pi-password     during the reset, preserve the pi user password
+
+      --copy-root-password   during the reset, preserve the root password
+
+      --copy-wifi            preserve the current wifi settings
+
+      --debug                output a lot of messages which indicate what is 
+                              happening during the process
+
+
 
 The factory reset causes the rPi to reboot to a recovery partition, upon which
 it restores the original root partition, and then reboots back to the fresh
@@ -41,11 +59,10 @@ original size.
 
 ### Resetting the rPi back to factory state
 
-Once the pi is booted, it will work as a normal Pi OS/raspbian installation,
-however it includes a utility which can be run as root with `--reset` argument,
-which will trigger a factory-reset.
+Once the pi is booted, it will work as a normal Pi OS/raspbian installation.
 
-For example you could do the following (over ssh) from the rPi:
+For example you could do the following (over ssh) from the rPi to cause a 
+factory reset:
 
     root@raspberrypi:~# /boot/factory_reset --reset
     factory restore script

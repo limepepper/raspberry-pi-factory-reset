@@ -613,6 +613,7 @@ function copy_to_restore(){
 
   # reset UUID
   tune2fs ${LOOP_RESTORE}p3 -U ${UUID_ROOTFS}
+  e2label ${LOOP_RESTORE}p3 rootfs
 
   pr_ok "3.7 call partprobe"
   partprobe ${LOOP_RESTORE}
@@ -726,65 +727,7 @@ function make_restore_script(){
 
   pr_header "create factory reset script in /boot directory"
 
-tee mnt/restore_boot/factory_reset > /dev/null << EOF
-#!/bin/bash
-
-echo "factory restore script"
-
-[[ "\$1" == "--reset" ]] && \
-{
-  echo "resetting"
-
-  if [[ \$(/usr/bin/id -u) -ne 0 ]]; then
-    echo "This needs to run as root"
-    exit 99
-  fi
-
-  sleep 5
-
-  echo "show original cmdline.txt"
-  cat /boot/cmdline.txt
-  echo ""
-
-  cp -f /etc/fstab /boot/fstab_original
-
-  cp -f /boot/cmdline.txt /boot/cmdline.txt_original
-  cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
-
-  sed -i "s/XXXYYYXXX/\$(blkid -o export  \
-        /dev/disk/by-label/recoveryfs | \
-         egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
-
-  # echo "show blkid"
-  # blkid
-  # echo ""
-
-  echo "show rootfs fstab"
-  cat /etc/fstab
-  echo ""
-
-  # echo "show recoveryfs fstab"
-  # mkdir -p /mnt/recoveryfs
-  # mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs
-  # cat /mnt/recoveryfs/etc/fstab
-
-  # umount -f /mnt/recoveryfs
-  # echo ""
-
-  echo "show current cmdline.txt"
-  cat /boot/cmdline.txt
-  echo ""
-
-  [[ "\$2" == "--copy-pi-password" ]] && {
-    cat /etc/shadow | egrep '^pi' | awk -F: '{print \$2}' > /boot/restore_pi_pass
-  }
-
-  echo "rebooting..."
-  reboot
-  exit 0
-}
-
-EOF
+  cp factory_reset mnt/restore_boot/factory_reset
 
   chmod +x mnt/restore_boot/factory_reset
 
