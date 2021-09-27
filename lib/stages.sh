@@ -21,10 +21,10 @@ function cleanup()
                 restore_recovery; do
   umount -v -q -d "mnt/${foo}" || true
   done
-  
+
   } | pr_section "unmounin"
-  
-#> /dev/null 2>&1 
+
+#> /dev/null 2>&1
 
   pr_section "detaching any loopback devices" < <(
   for imgname in $IMG_RESTORE $IMG_ORIG $IMG_LITE $IMG_COPY; do
@@ -71,16 +71,16 @@ function get_partitions_for_original(){
           jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img2\") .size ")
 
   echo ""
-  pr_kv "ORIG_P1_START     :   ${ORIG_P1_START}" 
-  pr_kv "ORIG_P1_SIZE      :   ${ORIG_P1_SIZE}" 
-  pr_kv "ORIG_P2_START     :   ${ORIG_P1_START}" 
-  pr_kv "ORIG_P2_SIZE      :   ${ORIG_P2_SIZE}" 
+  pr_kv "ORIG_P1_START     :   ${ORIG_P1_START}"
+  pr_kv "ORIG_P1_SIZE      :   ${ORIG_P1_SIZE}"
+  pr_kv "ORIG_P2_START     :   ${ORIG_P1_START}"
+  pr_kv "ORIG_P2_SIZE      :   ${ORIG_P2_SIZE}"
   echo ""
 
   ORIG_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $BASE.img)"
 
   pr_p "Total bytes for original image  is $(stat --format=\"%s\" $BASE.img)"
-  
+
 }
 
 # set the start and size of the 2 partitions in the lite image
@@ -103,10 +103,10 @@ function get_partitions_for_lite(){
           jq ".partitiontable .partitions[] | select(.node == \"${LITE}.img2\") .size ")
 
   echo ""
-  pr_kv "LITE_P1_START     :   ${LITE_P1_START}" 
-  pr_kv "LITE_P1_SIZE      :   ${LITE_P1_SIZE}" 
-  pr_kv "LITE_P2_START     :   ${LITE_P2_START}" 
-  pr_kv "LITE_P2_SIZE      :   ${LITE_P2_SIZE}" 
+  pr_kv "LITE_P1_START     :   ${LITE_P1_START}"
+  pr_kv "LITE_P1_SIZE      :   ${LITE_P1_SIZE}"
+  pr_kv "LITE_P2_START     :   ${LITE_P2_START}"
+  pr_kv "LITE_P2_SIZE      :   ${LITE_P2_SIZE}"
   echo ""
   echo ""
 
@@ -124,7 +124,7 @@ function get_partitions_for_lite(){
 function make_uuids(){
 
   pr_header "make UUID/partuuids for restore filesystems"
-  
+
   echo ""
 
   # partuuid seems to get reset by resize.sh, however UUID doesn't seem to work
@@ -132,7 +132,7 @@ function make_uuids(){
   RESTORE_PTUUID_NEW=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
   set -o pipefail
 
-  [ ! -z ${RESTORE_PTUUID_NEW} ] || { 
+  [ ! -z ${RESTORE_PTUUID_NEW} ] || {
     echo "RESTORE_PTUUID_NEW is empty '${RESTORE_PTUUID_NEW}'" && exit 99
      }
 
@@ -181,6 +181,7 @@ function make_loop_and_mount_original(){
   partprobe ${LOOP_ORIG}
   echo ""
 
+  blkid $LOOP_ORIG
 
   inspect_loop_device $LOOP_ORIG ORIG
   #  | pr_section "inspect loop device orig"
@@ -206,7 +207,7 @@ function make_loop_and_mount_copy(){
     # touch ${IMG_RESTORE}
   }
 
-  pr_ok "writing zeros to $IMG_COPY" 
+  pr_ok "writing zeros to $IMG_COPY"
 
   bytes_to_blocks $REPLY
 
@@ -374,7 +375,7 @@ function output_zipped_copy_rootfs(){
   # protect rootfs from further changes
   # umount mnt/copy_rootfs
   mount -o remount,ro mnt/copy_rootfs
-  
+
   step_pause
 
 }
@@ -648,7 +649,7 @@ function copy_to_restore(){
   echo "BEFORE_BLOCK_COUNT in bytes $(( BEFORE_BLOCK_COUNT * 4096 ))"
   echo "BEFORE_FREE_BLOCKS in bytes $(( BEFORE_FREE_BLOCKS * 4096 ))"
   echo "before free blocks in GB : $(( ( BEFORE_FREE_BLOCKS * 4096 ) / ( 1024 * 1024 ) ))"
-  
+
   # this is necessary to make the space for the recovery.zip
   resize2fs -p ${LOOP_RESTORE}p2
 
@@ -666,7 +667,7 @@ function copy_to_restore(){
   echo "RECOVERY_IMG_BYTES is $RECOVERY_IMG_BYTES"
   echo "RECOVERY_IMG_BYTES in GB is $(( RECOVERY_IMG_BYTES / ( 1024 * 1024 ) ))"
   echo ""
-  
+
   dumpe2fs ${LOOP_RESTORE}p2 | egrep '^Free blocks:'
   dumpe2fs ${LOOP_RESTORE}p2 | egrep '^Block size:'
 

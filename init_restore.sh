@@ -101,6 +101,9 @@ EOF
           conv=fsync \
           status=progress
 
+  # zipped partition had label copyroot
+  e2label /dev/mmcblk0p3 rootfs
+
   sleep 10
 
   echo "partprobing"
