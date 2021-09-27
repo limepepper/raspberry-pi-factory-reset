@@ -101,7 +101,7 @@ EOF
           conv=fsync \
           status=progress
 
-  sleep 1
+  sleep 10
 
   echo "partprobing"
   partprobe
@@ -160,6 +160,18 @@ EOF
     usermod -R /mnt/rootfs -p "$root_pass" root
     rm -f /boot/restore_root_pass
   fi
+
+  if [ -f /boot/wpa_supplicant.conf ] ; then
+    echo "copying old wifi settings into new partition"
+    cp -f /boot/wpa_supplicant.conf \
+        /mnt/rootfs/etc/wpa_supplicant/wpa_supplicant.conf
+    rm /boot/wpa_supplicant.conf
+    chmod 644 /etc/wpa_supplicant/wpa_supplicant.conf
+  else
+    echo "wpa supplicant did not exist"
+  fi
+
+  sleep 20
   
 
   touch /boot/ssh

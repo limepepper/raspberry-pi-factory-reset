@@ -1,56 +1,148 @@
 #!/bin/bash
 
+set -eu -o pipefail
+
 echo "factory restore script"
 
-[[ "$1" == "--reset" ]] && \
+OPT_RESET=""
+OPT_COPY_PI_PASS=""
+OPT_COPY_ROOT_PASS=""
+OPT_COPY_WIFI=""
+
+usage()
 {
-  echo "resetting"
+cat << EOF
+usage: $0 options
+Calling this script causes the rPi to reboot and factory reset. All data is lost
 
-  if [[ $(/usr/bin/id -u) -ne 0 ]]; then
-    echo "This needs to run as root"
-    exit 99
-  fi
+OPTIONS:
+   --reset                set this option to proceed with reset,
+                          otherwise script will exit and do nothing
 
-  sleep 5
+   --copy-pi-password     during the reset, will copy the pi password over
+                          to the freshly installed root filesystem
 
-  echo "show original cmdline.txt"
-  cat /boot/cmdline.txt
-  echo ""
+   --copy-root-password   will copy the root password over to the new images
 
-  cp -f /etc/fstab /boot/fstab_original
-
-  cp -f /boot/cmdline.txt /boot/cmdline.txt_original
-  cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
-
-  sed -i "s/XXXYYYXXX/$(blkid -o export  \
-        /dev/disk/by-label/recoveryfs | \
-         egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
-
-  # echo "show blkid"
-  # blkid
-  # echo ""
-
-  echo "show rootfs fstab"
-  cat /etc/fstab | egrep -v '^#'
-  echo ""
-
-  # echo "show recoveryfs fstab"
-  # mkdir -p /mnt/recoveryfs
-  # mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs
-  # cat /mnt/recoveryfs/etc/fstab
-
-  # umount -f /mnt/recoveryfs
-  # echo ""
-
-  echo "show current cmdline.txt"
-  cat /boot/cmdline.txt
-  echo ""
-
-  [[ "$2" == "--copy-pi-password" ]] && {
-    cat /etc/shadow | egrep '^pi' | awk -F: '{print $2}' > /boot/restore_pi_pass
-  }
-
-  echo "rebooting..."
-  reboot
-  exit 0
+   --copy-wifi            will copy wpa_supplicant wifi settings into restored
+                          rpi, so the wifi should be available on reboot
+EOF
 }
+
+for ((i=1; i<=$#; i++))
+do
+  # echo "arg is  \"${!i}\""
+  ARG="${!i}"
+
+  case $ARG in
+    --reset)
+      OPT_RESET=1
+    ;;
+
+    --copy-pi-password)
+      OPT_COPY_PI_PASS=1
+    ;;
+
+    --copy-root-password)
+      OPT_COPY_ROOT_PASS=1
+    ;;
+
+    --copy-wifi)
+      OPT_COPY_WIFI=1
+    ;;
+
+    *)
+    echo “unrecognised option: $ARG”
+    echo
+    usage
+    exit 1
+
+  esac
+done
+
+if [ ! "${OPT_RESET}" ] ; then
+    usage
+    exit 1
+fi
+
+
+echo "resetting"
+
+if [[ $(/usr/bin/id -u) -ne 0 ]]; then
+  echo "This needs to run as root"
+  exit 99
+fi
+
+sleep 2
+
+echo "show original cmdline.txt"
+cat /boot/cmdline.txt
+echo ""
+
+cp -f /etc/fstab /boot/fstab_original
+
+cp -f /boot/cmdline.txt /boot/cmdline.txt_original
+cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
+
+sed -i "s/XXXYYYXXX/$(blkid -o export  \
+      /dev/disk/by-label/recoveryfs | \
+        egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
+
+# echo "show blkid"
+# blkid
+# echo ""
+
+echo "show rootfs fstab"
+cat /etc/fstab | egrep -v '^#'
+echo ""
+
+# echo "show recoveryfs fstab"
+# mkdir -p /mnt/recoveryfs
+# mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs
+# cat /mnt/recoveryfs/etc/fstab
+
+# umount -f /mnt/recoveryfs
+# echo ""
+
+echo "show current cmdline.txt"
+cat /boot/cmdline.txt
+echo ""
+
+[[ "${OPT_COPY_PI_PASS}" ]] && {
+  echo "copy pi pass is set"
+  cat /etc/shadow | egrep '^pi' | awk -F: '{print $2}' > /boot/restore_pi_pass
+  echo "value of pi pass"
+  cat /boot/restore_pi_pass
+}
+
+[[ "${OPT_COPY_ROOT_PASS}" ]] && {
+  echo "copy root pass is set"
+  cat /etc/shadow | egrep '^root' | awk -F: '{print $2}' > /boot/restore_root_pass
+  echo "value of root pass"
+  cat /boot/restore_root_pass
+}
+
+[[ "${OPT_COPY_WIFI}" ]] && {
+  echo "copy wifi settings is set"
+  if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ] ; then
+    echo "wpa file exists"
+    cp /etc/wpa_supplicant/wpa_supplicant.conf \
+        /boot/wpa_supplicant.conf
+
+    echo "current contents of wpa_supplicant in /boot"
+    cat /boot/wpa_supplicant.conf
+  fi
+}
+
+cat <<EOF
+OPT_COPY_PI_PASS=${OPT_COPY_PI_PASS}
+OPT_COPY_ROOT_PASS=${OPT_COPY_ROOT_PASS}
+OPT_COPY_WIFI=${OPT_COPY_WIFI}
+EOF
+
+echo "rebooting in 10..."
+sleep 10
+
+
+reboot
+exit 0
