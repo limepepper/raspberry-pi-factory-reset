@@ -76,18 +76,18 @@ main () {
 
 
 cat << 'EOF' | tee logger
-##    _____          _
-##   |  ___|_ _  ___| |_ ___  _ __ _   _
-##   | |_ / _` |/ __| __/ _ \| '__| | | |
-##   |  _| (_| | (__| || (_) | |  | |_| |
-##   |_|  \__,_|\___|\__\___/|_|   \__, |
-##                                 |___/
-##    ____           _             _
-##   |  _ \ ___  ___| |_ ___  _ __(_)_ __   __ _
-##   | |_) / _ \/ __| __/ _ \| '__| | '_ \ / _` |
-##   |  _ <  __/\__ \ || (_) | |  | | | | | (_| |
-##   |_| \_\___||___/\__\___/|_|  |_|_| |_|\__, |
-##                                         |___/
+##      _____          _
+##     |  ___|_ _  ___| |_ ___  _ __ _   _
+##     | |_ / _` |/ __| __/ _ \| '__| | | |
+##     |  _| (_| | (__| || (_) | |  | |_| |
+##     |_|  \__,_|\___|\__\___/|_|   \__, |
+##                                   |___/
+##      ____           _             _
+##     |  _ \ ___  ___| |_ ___  _ __(_)_ __   __ _
+##     | |_) / _ \/ __| __/ _ \| '__| | '_ \ / _` |
+##     |  _ <  __/\__ \ || (_) | |  | | | | | (_| |
+##     |_| \_\___||___/\__\___/|_|  |_|_| |_|\__, |
+##                                           |___/
 EOF
 
   echo "show blkid"
@@ -167,12 +167,12 @@ EOF
         /mnt/rootfs/etc/wpa_supplicant/wpa_supplicant.conf
     rm /boot/wpa_supplicant.conf
     chmod 644 /etc/wpa_supplicant/wpa_supplicant.conf
-  else
-    echo "wpa supplicant did not exist"
-  fi
 
-  sleep 20
-  
+    # disable rfkill softtblock for interfaces
+    for filename in /mnt/rootfs/var/lib/systemd/rfkill/*:wlan ; do
+      echo 0 > $filename
+    done
+  fi
 
   touch /boot/ssh
 

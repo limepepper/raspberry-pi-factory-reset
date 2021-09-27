@@ -613,6 +613,7 @@ function copy_to_restore(){
 
   # reset UUID
   tune2fs ${LOOP_RESTORE}p3 -U ${UUID_ROOTFS}
+  e2label ${LOOP_RESTORE}p3 rootfs
 
   pr_ok "3.7 call partprobe"
   partprobe ${LOOP_RESTORE}

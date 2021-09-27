@@ -2,12 +2,11 @@
 
 set -eu -o pipefail
 
-echo "factory restore script"
-
 OPT_RESET=""
 OPT_COPY_PI_PASS=""
 OPT_COPY_ROOT_PASS=""
 OPT_COPY_WIFI=""
+OPT_DEBUG=""
 
 usage()
 {
@@ -19,13 +18,15 @@ OPTIONS:
    --reset                set this option to proceed with reset,
                           otherwise script will exit and do nothing
 
-   --copy-pi-password     during the reset, will copy the pi password over
-                          to the freshly installed root filesystem
+   --copy-pi-password     during the reset, preserve the pi user password
 
-   --copy-root-password   will copy the root password over to the new images
+   --copy-root-password   during the reset, preserve the root password
 
-   --copy-wifi            will copy wpa_supplicant wifi settings into restored
-                          rpi, so the wifi should be available on reboot
+   --copy-wifi            preserve the current wifi settings
+
+   --debug                output a lot of messages which indicate what is 
+                          happening during the process
+
 EOF
 }
 
@@ -65,8 +66,7 @@ if [ ! "${OPT_RESET}" ] ; then
     exit 1
 fi
 
-
-echo "resetting"
+echo "factory restore script - resetting"
 
 if [[ $(/usr/bin/id -u) -ne 0 ]]; then
   echo "This needs to run as root"
