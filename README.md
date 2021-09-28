@@ -48,18 +48,13 @@ These Pi OS/raspbian images can be directly flashed and run:
 
 https://github.com/limepepper/raspberry-pi-factory-reset/wiki/Downloads
 
-### Note on image sizes
-
-These zipped images contain a copy of the original root partition, a pristine
-copy of the rootfs, and a recovery partition. So they are at least 2 times the
-original size.
-
 
 ## Usage
 
 ### Resetting the rPi back to factory state
 
-Once the pi is booted, it will work as a normal Pi OS/raspbian installation.
+Once the restore image is flash and the pi is booted, it will work as a normal
+Pi OS/raspbian installation.
 
 For example you could do the following (over ssh) from the rPi to cause a
 factory reset:
@@ -78,7 +73,11 @@ The Pi will restore to a fresh installation:
 The pi will then reboot back to a fresh installation of Raspbian. The script
 sets up the restored raspbian so ssh is running and available.
 
+### Note on image sizes
 
+These zipped images contain a copy of the original root partition, a pristine
+copy of the rootfs, and a recovery partition. So they are at least 2 times the
+original size.
 
 ### Other information
 
