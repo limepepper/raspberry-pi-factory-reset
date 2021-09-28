@@ -15,6 +15,20 @@ OPT_DEBUG=""
 OPT_BOOT_RECOVERY=""
 OPT_BOOT_ROOT=""
 
+    GREENFG=$(tput setaf 2      2>/dev/null )
+    GREENBG=$(tput setab 2      2>/dev/null )
+     BLUEFG=$(tput setaf 4      2>/dev/null )
+     BLUEBG=$(tput setab 4      2>/dev/null )
+LIME_YELLOW=$(tput setaf 190    2>/dev/null )
+POWDER_BLUE=$(tput setaf 153    2>/dev/null )
+   ORANGEFG=$(tput setaf 3      2>/dev/null )
+   ORANGEBG=$(tput setab 3      2>/dev/null )
+  MAGENTAFG=$(tput setaf 5      2>/dev/null )
+  MAGENTABG=$(tput setab 5      2>/dev/null )
+     CYANFG=$(tput setaf 6      2>/dev/null )
+     CYANBG=$(tput setab 6      2>/dev/null )
+      RESET=$(tput sgr0         2>/dev/null )
+
 usage()
 {
 cat << EOF
@@ -97,7 +111,7 @@ do
 done
 
 if [ "${OPT_RESET}" -a "${OPT_BOOT_RECOVERY}" ] ; then
-    echo "only set one of --boot-to-recovery and --reset"
+    echo "${MAGENTAFG} only set one of --boot-to-recovery and --reset ${RESET}"
     echo
     usage
     exit 1
@@ -105,7 +119,7 @@ fi
 
 if [ ! "${OPT_RESET}" ] && [ ! "${OPT_BOOT_RECOVERY}" ] &&
   [ ! "${OPT_BOOT_ROOT}" ] ; then
-    echo "set one of --boot-to-recovery and --reset"
+    echo "${ORANGEFG}set only one of --boot-to-recovery, --boot-to-roor or --reset ${RESET}"
     echo
     usage
     exit 1

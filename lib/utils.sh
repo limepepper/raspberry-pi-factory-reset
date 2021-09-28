@@ -11,7 +11,7 @@ parse_blkid_var(){
 
   # local varname="${prefix}_UUID_BOOT"
   declare -r -g "${varname}"="$(blkid -s ${value} -o value ${devname})"
-  [ ! -z "${!varname}" ] || { 
+  [ ! -z "${!varname}" ] || {
     pr_alert "${varname} Empty: can't proceed at ${BASH_LINENO}"
     blkid ${devname}
     echo $varname
@@ -22,7 +22,7 @@ parse_blkid_var(){
     pr_red "left mounted. unmounting all loop devices, and removing images from"
     pr_red "loopback devices seemed to fix it"
     exit 99
-    
+
     }
   # echo "${varname}         : ${!varname}"
   printf '%s\n' "$GREEN$varname${spacefiller:${#varname}}$RESET : $ORANGEFG${!varname}$RESET"
@@ -47,7 +47,7 @@ inspect_loop_device(){
     parse_blkid_var "${prefix}_UUID_RESTORE" "${device}p2" "$prefix" "UUID"
     parse_blkid_var "${prefix}_UUID_ROOT"    "${device}p3" "$prefix" "UUID"
   fi
-  
+
   parse_blkid_var "${prefix}_PARTUUID_BOOT" "${device}p1" "$prefix" "PARTUUID"
 
   if [ ! -e "${device}p3" ] ; then
@@ -56,15 +56,19 @@ inspect_loop_device(){
     parse_blkid_var "${prefix}_PARTUUID_RESTORE" "${device}p2" "$prefix" "PARTUUID"
     parse_blkid_var "${prefix}_PARTUUID_ROOT"    "${device}p3" "$prefix" "PARTUUID"
   fi
-  
-  parse_blkid_var "${prefix}_BLOCK_SIZE_BOOT" "${device}p1" "$prefix" "BLOCK_SIZE"
 
-  if [ ! -e "${device}p3" ] ; then
-    parse_blkid_var "${prefix}_BLOCK_SIZE_ROOT" "${device}p2" "$prefix" "BLOCK_SIZE"
-  else
-    parse_blkid_var "${prefix}_BLOCK_SIZE_RESTORE" "${device}p2" "$prefix" "BLOCK_SIZE"
-    parse_blkid_var "${prefix}_BLOCK_SIZE_ROOT"    "${device}p3" "$prefix" "BLOCK_SIZE"
-  fi
+  # this not working on Ubuntu 20.04
+  # # blkid --version
+  # blkid from util-linux 2.34  (libblkid 2.34.0, 14-Jun-2019)
+
+  # parse_blkid_var "${prefix}_BLOCK_SIZE_BOOT" "${device}p1" "$prefix" "BLOCK_SIZE"
+
+  # if [ ! -e "${device}p3" ] ; then
+  #   parse_blkid_var "${prefix}_BLOCK_SIZE_ROOT" "${device}p2" "$prefix" "BLOCK_SIZE"
+  # else
+  #   parse_blkid_var "${prefix}_BLOCK_SIZE_RESTORE" "${device}p2" "$prefix" "BLOCK_SIZE"
+  #   parse_blkid_var "${prefix}_BLOCK_SIZE_ROOT"    "${device}p3" "$prefix" "BLOCK_SIZE"
+  # fi
   echo ""
 }
 
@@ -118,9 +122,9 @@ function check_sources(){
 
   pr_header "check sources exist"
 
-  [ -f ${IMG_ORIG} ] && { 
+  [ -f ${IMG_ORIG} ] && {
     echo "found ${IMG_ORIG}"
-    
+
   } || { echo "Not found source image '${IMG_ORIG}'" && exit;  }
 
   [ -f ${RECOVERY_SCRIPT_SOURCE} ] || { echo "Not found ${RECOVERY_SCRIPT_SOURCE}" && exit;  }
@@ -132,8 +136,8 @@ function check_sources(){
 }
 
 # parameters: takes $start and $size parameters in sectors.
-# description: 
-# 
+# description:
+#
 function find_boundary(){
   [ "$#" -eq 2 ] || die "need 2 arguments"
   start=$1

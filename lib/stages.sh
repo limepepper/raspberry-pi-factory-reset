@@ -41,6 +41,10 @@ function cleanup()
   done
   )
 
+  # if [ -f "${IMG_COPY}" ] ; then
+  #   rm "${IMG_COPY}"
+  # fi
+
   # Perform a garbage collection pass on the blkid cache to remove devices
   # which no longer exist
   blkid --garbage-collect
