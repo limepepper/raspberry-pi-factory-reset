@@ -9,7 +9,9 @@ If you regularly need to reset or restore a Raspberry Pi, it can become a bit
 annoying to have to power down the rPi, unplug the sdcard, and re-flash the
 original image back again.
 
-This project creates images that contain a `/boot/factory_reset` utility and a
+This project modifies the vanilla Pi OS
+[images](https://github.com/limepepper/raspberry-pi-factory-reset/wiki/Downloads)
+to add a `/boot/factory_reset` utility and a
 recovery partition containing a pristine image, which can be reset remotely
 with a single command.
 
@@ -33,9 +35,6 @@ It support some other options to preserve various settings
       --copy-root-password   during the reset, preserve the root password
 
       --copy-wifi            preserve the current wifi settings
-
-      --debug                output a lot of messages which indicate what is
-                              happening during the process
 
 
 
