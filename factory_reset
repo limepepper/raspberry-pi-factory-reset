@@ -278,14 +278,14 @@ if [ "${OPT_RESET}" ] ; then
     # @TODO this is repeated in a bunch of places, put in libs somewhere?
     # check that /boot device mount was a partuuid
     if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
-      echo "/boot was a PARTUUID"
+      echo "${ORANGEFG}/boot was a PARTUUID${RESET}"
       sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${boot_partuuid}      /boot     \3|" "$fstab_file"
       fixed_boot=1
     fi
 
     # check that /boot device mount was a uuid
     if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
-      echo "/boot was a UUID"
+      echo "${ORANGEFG}/boot was a UUID${RESET}"
       sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${boot_uuid}      /boot     \3|" "$fstab_file"
       fixed_boot=1
     fi

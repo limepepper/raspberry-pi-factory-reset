@@ -169,7 +169,7 @@ function make_uuids(){
 #
 function make_loop_and_mount_original(){
 
-  pr_header "mount the original img readonly on loopback"
+  pr_header "mount the original image readonly on loopback"
 
   LOOP_ORIG=$(losetup \
         --read-only \

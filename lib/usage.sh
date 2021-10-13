@@ -71,7 +71,7 @@ OPT_POST_SUMMARY=""
 OPT_RUN_TESTS=""
 
 # no idea what half of these options were supposed to do
-# would be nice to switch
+# would be nice to switch to something that handled long opts
 
 while getopts “arhcsi:l:p:vetz” OPTION
 do
