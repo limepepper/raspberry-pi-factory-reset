@@ -47,7 +47,7 @@ OPTION_DO_MAIN=""           # unset this to not do the main section
 # these are used to override different sections
 # mostly for debugging/development
 OPT_DO_CHECKS=""            # whether to do file and package checks
-OPT_GET_PART_FOR_ORIG=""   
+OPT_GET_PART_FOR_ORIG=""
 OPT_GET_PART_FOR_LITE=""    # get the lite image partition sizes
 OPT_MAKE_UUIDS=""
 OPT_MOUNT_ORIG=""
@@ -60,6 +60,7 @@ OPT_MOUNT_LITE=""
 OPT_GET_RECOVERY_SIZES=""
 OPT_MOUNT_RESTORE=""
 OPT_COPY_TO_RESTORE=""
+OPT_FIXUP_RECOVERY_ROOTFS=""
 
 OPT_FIX_CMDLINE_TXT=""
 OPT_MAKE_RESTORE_SCRIPT=""
@@ -67,7 +68,12 @@ OPT_MAKE_RECOVERY_SCRIPT=""
 
 OPT_POST_SUMMARY=""
 
-while getopts “arhcsi:l:p:ve” OPTION
+OPT_RUN_TESTS=""
+
+# no idea what half of these options were supposed to do
+# would be nice to switch to something that handled long opts
+
+while getopts “arhcsi:l:p:vetz” OPTION
 do
      case $OPTION in
          h)
@@ -76,7 +82,7 @@ do
            exit 1
         ;;
          a)
-            
+
             OPTION_CLEANUP_PRE=1
             OPT_DO_CHECKS="1"
             OPT_GET_PART_FOR_ORIG="1"
@@ -94,6 +100,7 @@ do
             OPT_FIX_CMDLINE_TXT="1"
             OPT_MAKE_RESTORE_SCRIPT="1"
             OPT_MAKE_RECOVERY_SCRIPT="1"
+            OPT_FIXUP_RECOVERY_ROOTFS="1"
 
             #
             OPT_GET_PART_FOR_LITE="1"
@@ -129,6 +136,15 @@ do
             OPT_USE_LITE=1
             OPT_GET_PART_FOR_LITE="1"
             OPT_MOUNT_LITE="1"
+         ;;
+         # don't do slow operations, used for testing
+         z)
+            OPT_MAKE_RECOVERY_ZIP=""
+         ;;
+         # run tests and exit
+         t)
+            OPT_RUN_TESTS="1"
+          break  # don't process any more options
          ;;
          ?)
             # echo "in usage"

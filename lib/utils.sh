@@ -1,6 +1,7 @@
 
 spacefiller='                           '
 
+# this tries to extract and display values produced by blkid
 parse_blkid_var(){
 
   [ "$#" -eq 4 ] || die "need 4 arguments"
@@ -10,6 +11,8 @@ parse_blkid_var(){
   local value=$4
 
   # local varname="${prefix}_UUID_BOOT"
+  # blkid -p references the low level superblock
+  # blkid -g refreshes the cache
   declare -r -g "${varname}"="$(blkid -s ${value} -o value ${devname})"
   [ ! -z "${!varname}" ] || {
     pr_alert "${varname} Empty: can't proceed at ${BASH_LINENO}"
@@ -29,12 +32,16 @@ parse_blkid_var(){
 
 }
 
+# this is a utility function to extract and display the various UUID
+# types etc for a loopback device
 inspect_loop_device(){
 
   [ "$#" -eq 2 ] || die "need 2 arguments"
 
   local device=$1
   local prefix=$2
+
+  blkid -g
 
   parse_blkid_var "${prefix}_PTTYPE" "${device}" "$prefix" "PTTYPE"
   parse_blkid_var "${prefix}_PTUUID" "${device}" "$prefix" "PTUUID"
@@ -223,4 +230,61 @@ function bytes_to_blocks(){
   else
     REPLY="$(( ( BYTE_COUNT / 8192 ) + 1 ))"
   fi
+}
+
+# inspects an fstab formatted file and takes values for UUID and PARTUUD for
+# /boot and / partitions, it fixes up the file for the new values
+# preserving other formatting
+function fixup_fstab(){
+  [ "$#" -eq 5 ] || die "need 5 arguments"
+
+  local fstab_file=$1
+  local boot_partuuid=$2
+  local boot_uuid=$3
+  local root_partuuid=$4
+  local root_uuid=$5
+
+  if [ ! -f "$fstab_file" ] ; then
+    echo "$fstab_file is not a file"
+    exit 99
+  fi
+
+  # basically 4 cases, either PARTUUID= or UUID= for both /boot and /
+  # there is probably a better way to do this
+
+  # something to track whether the value was fixed by one or other replacement
+  local fixed_boot=""
+  local fixed_root=""
+
+  # if /boot device mount was referenced by a partuuid
+  if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
+    pr_debug "/boot was a PARTUUID"
+    sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${boot_partuuid}      /boot     \3|" "$fstab_file"
+    fixed_boot=1
+  fi
+
+  # if /boot device mount was referenced by a uuid
+  if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
+    pr_debug "/boot was a UUID"
+    sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${boot_uuid}      /boot     \3|" "$fstab_file"
+    fixed_boot=1
+  fi
+
+  # if / device mount was referenced by a partuuid
+  if egrep '^PARTUUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+    pr_debug "/ was a PARTUUID"
+    sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|PARTUUID=${root_partuuid}      /     \3|" "$fstab_file"
+    fixed_root=1
+  fi
+
+  # check that / device mount was referenced by a uuid
+  if egrep '^UUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+    pr_debug "/ was a UUID"
+    sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|UUID=${root_partuuid}      /     \3|" "$fstab_file"
+    fixed_root=1
+  fi
+
+    echo
+    echo
+
 }

@@ -14,6 +14,7 @@ OPT_COPY_WIFI=""
 OPT_DEBUG=""
 OPT_BOOT_RECOVERY=""
 OPT_BOOT_ROOT=""
+OPT_NO_REBOOT=""
 
     GREENFG=$(tput setaf 2      2>/dev/null )
     GREENBG=$(tput setab 2      2>/dev/null )
@@ -36,29 +37,35 @@ usage: $0 options
 Calling this script causes the rPi to reboot and factory reset. All data is lost
 
 OPTIONS:
-   --reset                set this option to proceed with reset,
-                          otherwise script will exit and do nothing
-                          (mutually exclusive with --boot-to-recovery )
+   --reset                 set this option to proceed with reset,
+                           otherwise script will exit and do nothing
+                           (mutually exclusive with --boot-to-recovery )
 
-   --copy-pi-password     during the reset, preserve the pi user password
+   --copy-pi-password      during the reset, preserve the pi user password
 
-   --copy-root-password   during the reset, preserve the root password
+   --copy-root-password    during the reset, preserve the root password
 
-   --copy-wifi            preserve the current wifi settings
+   --copy-wifi             preserve the current wifi settings
 
-   --copy-all             preserve pi, root and wifi settings
+   --copy-all              preserve pi, root and wifi settings
 
 ADVANCED OPTIONS:
 
-   --debug                output a lot of messages which indicate what is
-                          happening during the process
+   --no-reboot             do everything, but don't reboot at the end, to allow
+                           for inspection
 
-   --boot-to-recovery     don't initiate reest, just reboot into the recovery
-                          partition (mutually exclusive with --reset)
+POSSIBLY BROKEN OPTIONS:
 
-   --boot-to-rootfs       boot back to rootfs (without reset)
-                          this only makes any sense when in recovery
+   --debug                 enable debugging verbosity
+
+   --boot-to-recovery      don't initiate reest, just reboot into the recovery
+                           partition (mutually exclusive with --reset)
+
+   --boot-to-root          boot back to rootfs (without reset)
+                           this only makes any sense when in recovery
+
 EOF
+
 }
 
 for ((i=1; i<=$#; i++))
@@ -101,6 +108,10 @@ do
       OPT_BOOT_ROOT=1
     ;;
 
+    --no-reboot)
+      OPT_NO_REBOOT=1
+    ;;
+
     *)
     echo “unrecognised option: $ARG”
     echo
@@ -129,101 +140,203 @@ echo "factory restore script - resetting"
 
 sleep 2
 
-if [ "${OPT_BOOT_RECOVERY}" ] ; then
-  echo "booting to recovery"
-
-  cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
-
-  sed -i "s/XXXYYYXXX/$(blkid -o export  \
-        /dev/disk/by-label/recoveryfs | \
-          egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
-
-  sed -i "s/init=[^[:space:]]*//g"  /boot/cmdline.txt
-
-  cat /boot/cmdline.txt
-  echo "rebooting in 10..."
-  sleep 10
-  touch /boot/ssh
-  reboot
-
-  exit 0
-fi
-
 if [ "${OPT_BOOT_ROOT}" ] ; then
   echo "booting to rootfs"
 
-  ROOTPARTUUID="$(blkid -s PARTUUID -o value /dev/disk/by-label/rootfs)"
-  sed -i "s/root=[^[:space:]]*/root=PARTUUID=${ROOTPARTUUID}/"  /boot/cmdline.txt
-  sed -i "s/init=[^[:space:]]*//"  /boot/cmdline.txt
+  ROOT_PART_PARTUUID=$(blkid -s PARTUUID -o value \
+        /dev/disk/by-label/rootfs)
+
+  ROOT_PART_UUID=$(blkid -s UUID -o value \
+        /dev/disk/by-label/rootfs)
+
+  if grep 'root=PARTUUID' /boot/cmdline.txt; then
+    sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$ROOT_PART_PARTUUID|" \
+          /boot/cmdline.txt
+  elif grep 'root=UUID' /boot/cmdline.txt; then
+    sed -i -E "s|(root=UUID)=([^[:space:]]+)|root=UUID=$ROOT_PART_UUID|" \
+          /boot/cmdline.txt
+  else
+    echo "unable to find UUID or PARTUUID in cmdline.txt"
+    echo "current cmdline.txt is"
+    cat /boot/cmdline.txt
+    exit 99
+  fi
+
+  # sed -i "s/init=[^[:space:]]*//"  /boot/cmdline.txt
 
   cat /boot/cmdline.txt
   echo "rebooting in 10..."
   sleep 10
-  reboot
+  [ ! "${OPT_NO_REBOOT}" ] && reboot || true
+
+  exit 0
+fi
+
+if [ "${OPT_BOOT_RECOVERY}" ] ; then
+  echo "booting to recovery"
+
+  echo "show current cmdline.txt"
+  cat /boot/cmdline.txt
+  echo ""
+
+  RECOVERY_PART_PARTUUID=$(blkid -s PARTUUID -o value \
+        /dev/disk/by-label/recoveryfs)
+
+  RECOVERY_PART_UUID=$(blkid -s UUID -o value \
+        /dev/disk/by-label/recoveryfs)
+
+  if grep 'root=PARTUUID' /boot/cmdline.txt; then
+    sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$RECOVERY_PART_PARTUUID|" \
+          /boot/cmdline.txt
+  elif grep 'root=UUID' /boot/cmdline.txt; then
+    sed -i -E "s|(root=UUID)=([^[:space:]]+)|root=UUID=$RECOVERY_PART_UUID|" \
+          /boot/cmdline.txt
+  else
+    echo "unable to find UUID or PARTUUID in cmdline.txt"
+    echo "current cmdline.txt is"
+    cat /boot/cmdline.txt
+    exit 99
+  fi
+
+  cat /boot/cmdline.txt
+  [ ! "${OPT_NO_REBOOT}" ] && echo "rebooting in 10..." || true
+  [ ! "${OPT_NO_REBOOT}" ] && sleep 10 || true
+  touch /boot/ssh
+
+  [ ! "${OPT_NO_REBOOT}" ] && reboot || true
 
   exit 0
 fi
 
 
+if [ "${OPT_RESET}" ] ; then
+    echo "resetting"
 
-echo "show original cmdline.txt"
-cat /boot/cmdline.txt
-echo ""
+    RECOVERY_PART_PARTUUID=$(blkid -s PARTUUID -o value \
+          /dev/disk/by-label/recoveryfs)
 
-cp -f /etc/fstab /boot/fstab_original
+    RECOVERY_PART_UUID=$(blkid -s UUID -o value \
+          /dev/disk/by-label/recoveryfs)
 
-cp -f /boot/cmdline.txt /boot/cmdline.txt_original
-cp -f /boot/cmdline.txt_recovery /boot/cmdline.txt
+    if grep 'root=PARTUUID' /boot/cmdline.txt; then
+      sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$RECOVERY_PART_PARTUUID|" \
+            /boot/cmdline.txt
+    elif grep 'root=UUID' /boot/cmdline.txt; then
+      sed -i -E "s|(root=UUID)=([^[:space:]]+)|root=UUID=$RECOVERY_PART_UUID|" \
+            /boot/cmdline.txt
+    else
+      echo "unable to find UUID or PARTUUID in cmdline.txt"
+      echo "current cmdline.txt is"
+      cat /boot/cmdline.txt
+      exit 99
+    fi
 
-sed -i "s/XXXYYYXXX/$(blkid -o export  \
-      /dev/disk/by-label/recoveryfs | \
-        egrep '^PARTUUID=' | cut -d'=' -f2)/g" /boot/cmdline.txt
+    # remove init option if we are still pre-resize mode. this would have to
+    # be done manually from raspi-config after this...
+    sed -i "s/init=[^[:space:]]*//g"  /boot/cmdline.txt
 
-# echo "show blkid"
-# blkid
-# echo ""
+    # add resize init script to end of boot option
+    echo "$(cat /boot/cmdline.txt) init=/usr/lib/raspi-config/init_restore.sh" > /boot/cmdline.txt_tmp
+    cp -f /boot/cmdline.txt_tmp /boot/cmdline.txt
 
-echo "show rootfs fstab"
-cat /etc/fstab | egrep -v '^#'
-echo ""
+    echo "show rootfs fstab"
+    cat /etc/fstab | egrep -v '^#'
+    echo ""
 
-# echo "show recoveryfs fstab"
-# mkdir -p /mnt/recoveryfs
-# mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs
-# cat /mnt/recoveryfs/etc/fstab
+    echo "show recoveryfs fstab"
+    mkdir -p /mnt/recoveryfs
+    mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs  || \
+        { [ $? -eq 32 ] && echo "already mounted" || \
+            { echo "some other error" ;  exit 99 ;}  }
 
-# umount -f /mnt/recoveryfs
-# echo ""
+    cat /mnt/recoveryfs/etc/fstab
 
-echo "show current cmdline.txt"
-cat /boot/cmdline.txt
-echo ""
 
-[[ "${OPT_COPY_PI_PASS}" ]] && {
-  echo "copy pi pass is set"
-  cat /etc/shadow | egrep '^pi' | awk -F: '{print $2}' > /boot/restore_pi_pass
-  echo "value of pi pass"
-  cat /boot/restore_pi_pass
-}
+    P1_UUID="$(blkid -o value -s UUID /dev/mmcblk0p1)"
+    P2_UUID="$(blkid -o value -s UUID /dev/mmcblk0p2)"
 
-[[ "${OPT_COPY_ROOT_PASS}" ]] && {
-  echo "copy root pass is set"
-  cat /etc/shadow | egrep '^root' | awk -F: '{print $2}' > /boot/restore_root_pass
-  echo "value of root pass"
-  cat /boot/restore_root_pass
-}
+    P1_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p1)"
+    P2_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p2)"
 
-[[ "${OPT_COPY_WIFI}" ]] && {
-  echo "copy wifi settings is set"
-  if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ] ; then
-    echo "wpa file exists"
-    cp /etc/wpa_supplicant/wpa_supplicant.conf \
-        /boot/wpa_supplicant.conf
+    # this junk copied from utils methds. needs @TODO refactoring
+    fstab_file=/mnt/recoveryfs/etc/fstab
+    boot_partuuid=$P1_PARTUUID
+    boot_uuid=$P1_UUID
+    root_partuuid=$P2_PARTUUID
+    root_uuid=$P2_UUID
 
-    echo "current contents of wpa_supplicant in /boot"
-    cat /boot/wpa_supplicant.conf
-  fi
-}
+    [ "${boot_partuuid}" ] || { echo "value not populated - ${boot_partuuid}"; exit 99 ; }
+    [ "${boot_uuid}" ] || { echo "value not populated - ${boot_uuid}"; exit 99 ; }
+    [ "${root_partuuid}" ] || { echo "value not populated - ${root_partuuid}"; exit 99 ; }
+    [ "${root_uuid}" ] || { echo "value not populated - ${root_uuid}"; exit 99 ; }
+
+    if [ ! -f "$fstab_file" ] ; then
+      echo "$fstab_file is not a file"
+      exit 99
+    fi
+
+    # @TODO this is repeated in a bunch of places, put in libs somewhere?
+    # check that /boot device mount was a partuuid
+    if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
+      echo "${ORANGEFG}/boot was a PARTUUID${RESET}"
+      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${boot_partuuid}      /boot     \3|" "$fstab_file"
+      fixed_boot=1
+    fi
+
+    # check that /boot device mount was a uuid
+    if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
+      echo "${ORANGEFG}/boot was a UUID${RESET}"
+      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${boot_uuid}      /boot     \3|" "$fstab_file"
+      fixed_boot=1
+    fi
+
+    # check that / device mount was a partuuid
+    if egrep '^PARTUUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+      echo "/ was a PARTUUID"
+      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|PARTUUID=${root_partuuid}      /     \3|" "$fstab_file"
+      fixed_root=1
+    fi
+
+    # check that / device mount was a uuid
+    if egrep '^UUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+      echo "/ was a UUID"
+      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|UUID=${root_partuuid}      /     \3|" "$fstab_file"
+      fixed_root=1
+    fi
+
+    umount -f /mnt/recoveryfs
+    echo ""
+
+
+    echo "show current cmdline.txt"
+    cat /boot/cmdline.txt
+    echo ""
+
+    [[ "${OPT_COPY_PI_PASS}" ]] && {
+      echo "copy pi pass is set"
+      cat /etc/shadow | egrep '^pi' | awk -F: '{print $2}' > /boot/restore_pi_pass
+      echo "value of pi pass"
+      cat /boot/restore_pi_pass
+    }
+
+    [[ "${OPT_COPY_ROOT_PASS}" ]] && {
+      echo "copy root pass is set"
+      cat /etc/shadow | egrep '^root' | awk -F: '{print $2}' > /boot/restore_root_pass
+      echo "value of root pass"
+      cat /boot/restore_root_pass
+    }
+
+    [[ "${OPT_COPY_WIFI}" ]] && {
+      echo "copy wifi settings is set"
+      if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ] ; then
+        echo "wpa file exists"
+        cp /etc/wpa_supplicant/wpa_supplicant.conf \
+            /boot/wpa_supplicant.conf
+
+        echo "current contents of wpa_supplicant in /boot"
+        cat /boot/wpa_supplicant.conf
+      fi
+    }
 
 cat <<EOF
 OPT_COPY_PI_PASS=${OPT_COPY_PI_PASS}
@@ -231,9 +344,10 @@ OPT_COPY_ROOT_PASS=${OPT_COPY_ROOT_PASS}
 OPT_COPY_WIFI=${OPT_COPY_WIFI}
 EOF
 
-echo "rebooting in 10..."
-sleep 10
 
+    [ ! "${OPT_NO_REBOOT}" ] && echo "rebooting in 10..." || true
+    [ ! "${OPT_NO_REBOOT}" ] && sleep 10 || true
 
-reboot
-exit 0
+    [ ! "${OPT_NO_REBOOT}" ] && reboot || true
+    exit 0
+fi

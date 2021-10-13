@@ -1,19 +1,31 @@
 #!/bin/bash
 
+# this whole thing has become ridiculously complicated
+# I think I should redo it in python
+
 # fail on errors, undefined variables, and errors in pipes
 set -eu -o pipefail
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
+# output formatting functions like pr_header, pr_debug etc
 source "$DIR/lib/display_funcs"
+# handles options processing for script
 source "$DIR/lib/usage.sh"
+# variables derived from setup options and various constants
 source "$DIR/lib/setup.sh"
+# bunch of utility functions for inspecting/setting values etc
 source "$DIR/lib/utils.sh"
+# this is where the main logic lives
 source "$DIR/lib/stages.sh"
+# initial attempt at having some unit tests
+source "$DIR/lib/tests.sh"
 
+# dump variables as seen after options and defauls processing
 show_setup_var_summary
 
 # this is to cleanup any previous runs that didn't run cleanup at the end
+# this won't cleanup mounts from different image to the one give with -i
 if [ ! -z "${OPTION_CLEANUP_PRE}" ]; then
   cleanup
 fi
@@ -23,19 +35,27 @@ if [ "$OPT_DO_CHECKS" ] ; then
   check_sources
 fi
 
+if [ ! -z "${OPT_RUN_TESTS}" ]; then
+  run_tests
+  exit 0
+fi
+
 # extract the partition start/sizes for the source image
 # these are needed to create the copy of the original
 [ "$OPT_GET_PART_FOR_ORIG" ] && get_partitions_for_original
 
-# extract start/sizes for lite image (if used)
+# extract part start/sizes for lite image (if used)
 # we need the size of the root partition from the lite image
+# to calculate the total space required lite+recovery.zip+free space
 [ "$OPT_GET_PART_FOR_LITE" ] && get_partitions_for_lite
 
 # to avoid conflicts, generate uuids for boot, recovery, root partions
-# @TODO not sure if this is actually needed.. to validate...
+# @TODO not sure if this is actually needed.. to check that...
+# currently the only thing that seems absolutely necessary, is that the
+# root/recovery parts of the recovery image have unique UUIDs
 [ "$OPT_MAKE_UUIDS" ] && make_uuids
 
-# mount the boot and root partiions of source img to loopback devices
+# mount the boot and root partiions of source img to loopback devices ro
 [ "$OPT_MOUNT_ORIG" ] && make_loop_and_mount_original
 
 # make a writable copy of the source image and mount it
@@ -45,12 +65,16 @@ fi
 [ "$OPT_COPY_TO_COPY" ] && copy_original_to_copy
 
 # insert the generated UUID into the rootfs fstab from those generated earlier
-[ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
+# @TODO if this is going to be done, it needs to search and replace rather than
+# template out the fstab... disabled as will probably break things as it is
+# [ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
 
 # the resize script fails if the root partiion is not in position 2
 # so this needs to be copied into the copy image
-# @TODO not sure if this is still needed, as the current script checks the 
+# @TODO not sure if this is still needed, as the current script checks the
 # partition number of the root partition.
+# the only thing this script does now (??) is add some sleeps to make the output
+# more useful in failure situations
 [ "$OPT_FIX_RESIZE_SCRIPT" ] && fix_resize_script
 
 # zip the copy of the rootfs for use in restoring
@@ -69,6 +93,8 @@ fi
 # copy the various source partiions into the restore image
 # mount the partitions for further editing
 [ "$OPT_COPY_TO_RESTORE" ] && copy_to_restore
+
+[ "$OPT_FIXUP_RECOVERY_ROOTFS" ] && fixup_fstab_in_recovery_rootfs
 
 # edit the cmdline.txt file for correct partition
 [ "$OPT_FIX_CMDLINE_TXT" ] && overwrite_cmdline_for_boot
