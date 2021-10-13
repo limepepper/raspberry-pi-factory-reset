@@ -37,30 +37,34 @@ usage: $0 options
 Calling this script causes the rPi to reboot and factory reset. All data is lost
 
 OPTIONS:
-   --reset                set this option to proceed with reset,
-                          otherwise script will exit and do nothing
-                          (mutually exclusive with --boot-to-recovery )
+   --reset                 set this option to proceed with reset,
+                           otherwise script will exit and do nothing
+                           (mutually exclusive with --boot-to-recovery )
 
-   --copy-pi-password     during the reset, preserve the pi user password
+   --copy-pi-password      during the reset, preserve the pi user password
 
-   --copy-root-password   during the reset, preserve the root password
+   --copy-root-password    during the reset, preserve the root password
 
-   --copy-wifi            preserve the current wifi settings
+   --copy-wifi             preserve the current wifi settings
 
-   --copy-all             preserve pi, root and wifi settings
+   --copy-all              preserve pi, root and wifi settings
 
 ADVANCED OPTIONS:
 
-   --no-reboot            do everything, but don't reboot at the end, to allow
-                          for inspection
+   --no-reboot             do everything, but don't reboot at the end, to allow
+                           for inspection
+
+POSSIBLY BROKEN OPTIONS:
+
+   --debug                 enable debugging verbosity
+
+   --boot-to-recovery      don't initiate reest, just reboot into the recovery
+                           partition (mutually exclusive with --reset)
+
+   --boot-to-root          boot back to rootfs (without reset)
+                           this only makes any sense when in recovery
+
 EOF
-
-# I think these other options are broken at the moment
-  #  --boot-to-recovery     don't initiate reest, just reboot into the recovery
-  #                         partition (mutually exclusive with --reset)
-
-  #  --boot-to-rootfs       boot back to rootfs (without reset)
-  #                         this only makes any sense when in recovery
 
 }
 
@@ -271,10 +275,18 @@ if [ "${OPT_RESET}" ] ; then
       exit 99
     fi
 
+    # @TODO this is repeated in a bunch of places, put in libs somewhere?
     # check that /boot device mount was a partuuid
     if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
       echo "/boot was a PARTUUID"
       sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${boot_partuuid}      /boot     \3|" "$fstab_file"
+      fixed_boot=1
+    fi
+
+    # check that /boot device mount was a uuid
+    if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
+      echo "/boot was a UUID"
+      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${boot_uuid}      /boot     \3|" "$fstab_file"
       fixed_boot=1
     fi
 
@@ -283,13 +295,6 @@ if [ "${OPT_RESET}" ] ; then
       echo "/ was a PARTUUID"
       sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|PARTUUID=${root_partuuid}      /     \3|" "$fstab_file"
       fixed_root=1
-    fi
-
-    # check that /boot device mount was a uuid
-    if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
-      echo "/boot was a UUID"
-      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${boot_uuid}      /boot     \3|" "$fstab_file"
-      fixed_boot=1
     fi
 
     # check that / device mount was a uuid
