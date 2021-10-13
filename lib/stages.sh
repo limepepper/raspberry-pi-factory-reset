@@ -325,27 +325,27 @@ function copy_original_to_copy(){
 }
 
 
-function fix_copy_rootfs_fstab(){
+# function fix_copy_rootfs_fstab(){
 
-  pr_header "fixing root fstab"
+#   pr_header "fixing root fstab"
 
-  pr_ok "current live fsta /etc/fstab"
-  cat mnt/copy_rootfs/etc/fstab  | column -t | pr_quote
+#   pr_ok "current live fsta /etc/fstab"
+#   cat mnt/copy_rootfs/etc/fstab  | column -t | pr_quote
 
-  echo
+#   echo
 
-  pr_ok "map the live fstab to the 3rd partition"
+#   pr_ok "map the live fstab to the 3rd partition"
 
-(column -t | tee mnt/copy_rootfs/etc/fstab ) <<EOF | pr_quote
-proc                     /proc  proc    defaults          0       0
-UUID=${ORIG_UUID_BOOT}   /boot  vfat    defaults          0       2
-UUID=${UUID_ROOTFS}      /      ext4    defaults,noatime  0       1
-EOF
+# (column -t | tee mnt/copy_rootfs/etc/fstab ) <<EOF | pr_quote
+# proc                     /proc  proc    defaults          0       0
+# UUID=${ORIG_UUID_BOOT}   /boot  vfat    defaults          0       2
+# UUID=${UUID_ROOTFS}      /      ext4    defaults,noatime  0       1
+# EOF
 
-  sync
+#   sync
 
-  step_pause
-}
+#   step_pause
+# }
 
 # doesn't wait for error message
 function fix_resize_script(){
@@ -694,6 +694,23 @@ function copy_to_restore(){
 
 }
 
+function fixup_fstab_in_recovery_rootfs(){
+
+  pr_debug "existing  mnt/restore_rootfs/etc/fstab"
+  echo ">>>>>"
+  cat mnt/restore_rootfs/etc/fstab
+  echo "<<<<<"
+
+  fixup_fstab  mnt/restore_rootfs/etc/fstab \
+      "${RESTORE_PARTUUID_BOOT}"  \
+      "${RESTORE_UUID_BOOT}" \
+      "${RESTORE_PARTUUID_ROOT}" \
+      "${RESTORE_UUID_ROOT}"
+
+  cat mnt/restore_rootfs/etc/fstab
+
+}
+
 function overwrite_cmdline_for_boot(){
 
   pr_header "current boot cmdline.txt"
@@ -706,17 +723,18 @@ function overwrite_cmdline_for_boot(){
   pr_ok "saving original cmdline.txt"
   cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_from_pristine
 
-  pr_ok "create the boot from live rootfs cmdline.txt"
+  pr_ok "edit the cmdline.txt to point to the partition-3"
 
-tee mnt/restore_boot/cmdline.txt << EOF
-console=serial0,115200 console=tty1 root=PARTUUID=${RESTORE_PTUUID_NEW}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait init=/usr/lib/raspi-config/init_resize.sh
-EOF
-
-  pr_ok "create alt cmd file for recovery boot"
-
-tee mnt/restore_boot/cmdline.txt_recovery << EOF
-console=serial0,115200 console=tty1 root=PARTUUID=XXXYYYXXX rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet init=${RECOVERY_SCRIPT_TARGET}
-EOF
+  if grep 'root=PARTUUID' mnt/restore_boot/cmdline.txt; then
+    sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$RESTORE_PTUUID_NEW-03|" mnt/restore_boot/cmdline.txt
+  elif grep 'root=UUID' mnt/restore_boot/cmdline.txt; then
+    sed -i -E "s|(root=UUID)=([^[:space:]]+)|root=UUID=$RESTORE_BOOT_UUID|" mnt/restore_boot/cmdline.txt
+  else
+    echo "unable to find UUID or PARTUUID in cmdline.txt"
+    echo "current cmdline.txt is"
+    cat mnt/restore_boot/cmdline.txt
+    exit 99
+  fi
 
   step_pause
 
@@ -756,29 +774,37 @@ function make_recovery_script(){
 
 # not sure this is getting used on the console...?
 tee mnt/restore_recovery/etc/motd << EOF
-##    ____  _____ ____ _____     _______ ______   __
-##   |  _ \| ____/ ___/ _ \ \   / / ____|  _ \ \ / /
-##   | |_) |  _|| |  | | | \ \ / /|  _| | |_) \ V /
-##   |  _ <| |__| |__| |_| |\ V / | |___|  _ < | |
-##   |_| \_\_____\____\___/  \_/  |_____|_| \_\|_|
+##     ____  _____ ____ _____     _______ ______   __
+##    |  _ \| ____/ ___/ _ \ \   / / ____|  _ \ \ / /
+##    | |_) |  _|| |  | | | \ \ / /|  _| | |_) \ V /
+##    |  _ <| |__| |__| |_| |\ V / | |___|  _ < | |
+##    |_| \_\_____\____\___/  \_/  |_____|_| \_\|_|
 ##
 EOF
 
-pr_ok "map the recovery fstab to the 2nd partition"
-( column -t | tee mnt/restore_recovery/etc/fstab ) <<EOF | pr_quote
-proc                     /proc    proc    defaults          0       0
-UUID=${ORIG_UUID_BOOT}   /boot    vfat    defaults          0       2
-UUID=${UUID_RESTORE}     /        ext4    defaults,noatime  0       1
-EOF
+  pr_debug "existing  mnt/restore_recovery/etc/fstab"
+  echo ">>>>>"
+  cat mnt/restore_recovery/etc/fstab
+  echo "<<<<<"
 
-pr_ok "copy the recovery image to the recovery /opt dir for restoring"
 
-sync
 
-#dd if=${LOOP_RESTORE}p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
-cp recovery.img.zip mnt/restore_recovery/opt/recovery.img.zip
+  fixup_fstab  mnt/restore_recovery/etc/fstab \
+      "${RESTORE_PARTUUID_BOOT}"  \
+      "${ORIG_UUID_BOOT}" \
+      "${RESTORE_PARTUUID_RESTORE}" \
+      "${RESTORE_UUID_RESTORE}"
 
-# | zip mnt/restore_recovery/opt/recovery.img.zip -
+  cat mnt/restore_recovery/etc/fstab
+
+  pr_ok "copy the recovery image to the recovery /opt dir for restoring"
+
+  sync
+
+  #dd if=${LOOP_RESTORE}p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
+  cp recovery.img.zip mnt/restore_recovery/opt/recovery.img.zip
+
+  # | zip mnt/restore_recovery/opt/recovery.img.zip -
 
 }
 
@@ -807,10 +833,6 @@ function get_postbuild_summary(){
 
   pr_h2 "/boot/cmdline.txt for restore image"
   cat mnt/restore_boot/cmdline.txt
-  echo ""
-
-  pr_h2 "/boot/cmdline_recovery for restore image. (ie template for recovery)"
-  cat mnt/restore_boot/cmdline.txt_recovery
   echo ""
 
 }

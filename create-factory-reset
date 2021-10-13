@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# this whole thing has become ridiculously complicated
+# I think I should redo it in python
+
 # fail on errors, undefined variables, and errors in pipes
 set -eu -o pipefail
 
@@ -10,6 +13,7 @@ source "$DIR/lib/usage.sh"
 source "$DIR/lib/setup.sh"
 source "$DIR/lib/utils.sh"
 source "$DIR/lib/stages.sh"
+source "$DIR/lib/tests.sh"
 
 show_setup_var_summary
 
@@ -23,12 +27,18 @@ if [ "$OPT_DO_CHECKS" ] ; then
   check_sources
 fi
 
+if [ ! -z "${OPT_RUN_TESTS}" ]; then
+  run_tests
+  exit 0
+fi
+
 # extract the partition start/sizes for the source image
 # these are needed to create the copy of the original
 [ "$OPT_GET_PART_FOR_ORIG" ] && get_partitions_for_original
 
 # extract start/sizes for lite image (if used)
 # we need the size of the root partition from the lite image
+# to calculate the total space required lite+recovery.zip+free space
 [ "$OPT_GET_PART_FOR_LITE" ] && get_partitions_for_lite
 
 # to avoid conflicts, generate uuids for boot, recovery, root partions
@@ -45,11 +55,11 @@ fi
 [ "$OPT_COPY_TO_COPY" ] && copy_original_to_copy
 
 # insert the generated UUID into the rootfs fstab from those generated earlier
-[ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
+# [ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
 
 # the resize script fails if the root partiion is not in position 2
 # so this needs to be copied into the copy image
-# @TODO not sure if this is still needed, as the current script checks the 
+# @TODO not sure if this is still needed, as the current script checks the
 # partition number of the root partition.
 [ "$OPT_FIX_RESIZE_SCRIPT" ] && fix_resize_script
 
@@ -69,6 +79,8 @@ fi
 # copy the various source partiions into the restore image
 # mount the partitions for further editing
 [ "$OPT_COPY_TO_RESTORE" ] && copy_to_restore
+
+[ "$OPT_FIXUP_RECOVERY_ROOTFS" ] && fixup_fstab_in_recovery_rootfs
 
 # edit the cmdline.txt file for correct partition
 [ "$OPT_FIX_CMDLINE_TXT" ] && overwrite_cmdline_for_boot

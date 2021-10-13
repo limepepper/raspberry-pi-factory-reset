@@ -121,14 +121,27 @@ EOF
   echo "show filesystem size"
   df -h
 
+  echo "right before sleeping before using blkid"
   sleep 10
 
-  PTUUID=$(blkid -p -s PTUUID -o value /dev/mmcblk0)
+  blkid || { echo "unable to run blkid, or error'ed" ; }
 
-  P1_UUID="$(blkid -p -o value -s UUID /dev/mmcblk0p1)"
-  P3_UUID="$(blkid -p -o value -s UUID /dev/mmcblk0p3)"
+  # @TODO should use labels to find these?
+  P1_UUID="$(blkid -o value -s UUID /dev/mmcblk0p1)"
+  P3_UUID="$(blkid -o value -s UUID /dev/mmcblk0p3)"
 
-  echo "PTUUID is ${PTUUID}"
+  P1_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p1)"
+  P3_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p3)"
+
+  blkid -o value -s UUID /dev/mmcblk0p1
+  echo
+  blkid
+  sleep 10
+
+  [ "${P1_UUID}" ] || { echo "value not populated - ${P1_UUID}"; exit 99 ; }
+  [ "${P3_UUID}" ] || { echo "value not populated - ${P3_UUID}"; exit 99 ; }
+  [ "${P1_PARTUUID}" ] || { echo "value not populated - ${P1_PARTUUID}"; exit 99 ; }
+  [ "${P3_PARTUUID}" ] || { echo "value not populated - ${P3_PARTUUID}"; exit 99 ; }
 
   mkdir -p /mnt/rootfs
   mount /dev/mmcblk0p3 /mnt/rootfs
@@ -138,17 +151,66 @@ EOF
   # echo "show blkid for /dev/mmcblk0p3 -p"
   # blkid -p -o export /dev/mmcblk0p3
 
-tee /boot/cmdline.txt << EOF
-console=serial0,115200 console=tty1 root=PARTUUID=${PTUUID}-03 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet init=/usr/lib/raspi-config/init_resize.sh
-EOF
+  if grep 'root=PARTUUID' /boot/cmdline.txt; then
+    sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$P3_PARTUUID|" \
+          /boot/cmdline.txt
+  elif grep 'root=UUID' /boot/cmdline.txt; then
+    sed -i -E "s|(root=UUID)=([^[:space:]]+)|root=UUID=$P3_UUID|" \
+          /boot/cmdline.txt
+  else
+    echo "unable to find UUID or PARTUUID in cmdline.txt"
+    echo "current cmdline.txt is"
+    cat /boot/cmdline.txt
+    exit 99
+  fi
 
-tee /mnt/rootfs/etc/fstab << EOF
-proc            /proc           proc    defaults          0       0
-UUID=${P1_UUID}  /boot           vfat    defaults          0       2
-UUID=${P3_UUID}  /               ext4    defaults,noatime  0       1
-# a swapfile is not a swap partition, no line here
-#   use  dphys-swapfile swap[on|off]  for that
-EOF
+  # remove existing init option
+  sed -i "s/init=[^[:space:]]*//g"  /boot/cmdline.txt
+
+  # add resize init script to end of boot option
+  echo "$(cat /boot/cmdline.txt) init=/usr/lib/raspi-config/init_resize.sh" > /boot/cmdline.txt_tmp
+  cp -f /boot/cmdline.txt_tmp /boot/cmdline.txt
+
+  local fstab_file=/mnt/rootfs/etc/fstab
+  local boot_partuuid=$P1_PARTUUID
+  local boot_uuid=$P1_UUID
+  local root_partuuid=$P3_PARTUUID
+  local root_uuid=$P3_UUID
+
+  [ "${boot_partuuid}" ] || { echo "value not populated - ${boot_partuuid}"; exit 99 ; }
+  [ "${boot_uuid}" ] || { echo "value not populated - ${boot_uuid}"; exit 99 ; }
+  [ "${root_partuuid}" ] || { echo "value not populated - ${root_partuuid}"; exit 99 ; }
+  [ "${root_uuid}" ] || { echo "value not populated - ${root_uuid}"; exit 99 ; }
+
+  # if /boot device mount was referenced by a partuuid
+  if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
+    echo "/boot was a PARTUUID"
+    sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${boot_partuuid}      /boot     \3|" "$fstab_file"
+    fixed_boot=1
+  fi
+
+  # if /boot device mount was referenced by a uuid
+  if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
+    echo "/boot was a UUID"
+    sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${boot_uuid}      /boot     \3|" "$fstab_file"
+    fixed_boot=1
+  fi
+
+  # if / device mount was a partuuid
+  if egrep '^PARTUUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+    echo "/ was a PARTUUID"
+    sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|PARTUUID=${root_partuuid}      /     \3|" "$fstab_file"
+    fixed_root=1
+  fi
+
+  # if / device mount was a uuid
+  if egrep '^UUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+    echo "/ was a UUID"
+    sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|UUID=${root_partuuid}      /     \3|" "$fstab_file"
+    fixed_root=1
+  fi
+
+  # restore stuff from previous installation
 
   if [ -f /boot/restore_pi_pass ] ; then
     echo "copying old pi password into new rootfs"
@@ -165,11 +227,13 @@ EOF
   fi
 
   if [ -f /boot/wpa_supplicant.conf ] ; then
-    echo "copying old wifi settings into new partition"
-    cp -f /boot/wpa_supplicant.conf \
-        /mnt/rootfs/etc/wpa_supplicant/wpa_supplicant.conf
-    rm /boot/wpa_supplicant.conf
-    chmod 644 /etc/wpa_supplicant/wpa_supplicant.conf
+    # apparently this is done automatically during firstboot if
+    # /boot/wpa_supplicant.conf exists, we only need to disable rfkill
+    # echo "copying old wifi settings into new partition"
+    # cp -f /boot/wpa_supplicant.conf \
+    #    /mnt/rootfs/etc/wpa_supplicant/wpa_supplicant.conf
+    # rm /boot/wpa_supplicant.conf
+    # chmod 644 /etc/wpa_supplicant/wpa_supplicant.conf
 
     # disable rfkill softtblock for interfaces
     for filename in /mnt/rootfs/var/lib/systemd/rfkill/*:wlan ; do
@@ -177,6 +241,7 @@ EOF
     done
   fi
 
+  # enable the
   touch /boot/ssh
 
   echo "show filesystem size"
