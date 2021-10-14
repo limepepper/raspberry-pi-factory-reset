@@ -19,7 +19,7 @@ function cleanup()
                 restore_boot \
                 restore_rootfs \
                 restore_recovery; do
-  umount -v -q -d "mnt/${foo}" || true
+  umount -v -d "mnt/${foo}" || true
   done
 
   } | pr_section "unmounin"
@@ -715,10 +715,10 @@ function overwrite_cmdline_for_boot(){
 
   pr_header "current boot cmdline.txt"
 
-  if [ $VERBOSITY -gt 3 ] ; then
+  #if [ $VERBOSITY -gt 3 ] ; then
     pr_ok "current cmdline.txt is"
     cat mnt/restore_boot/cmdline.txt
-  fi
+  #fi
 
   pr_ok "saving original cmdline.txt"
   cp mnt/restore_boot/cmdline.txt mnt/restore_boot/cmdline.txt_from_pristine
@@ -726,7 +726,7 @@ function overwrite_cmdline_for_boot(){
   pr_ok "edit the cmdline.txt to point to the partition-3"
 
   if grep 'root=PARTUUID' mnt/restore_boot/cmdline.txt; then
-    sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$RESTORE_PTUUID_NEW-03|" mnt/restore_boot/cmdline.txt
+    sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$RESTORE_PARTUUID_ROOT|" mnt/restore_boot/cmdline.txt
   elif grep 'root=UUID' mnt/restore_boot/cmdline.txt; then
     sed -i -E "s|(root=UUID)=([^[:space:]]+)|root=UUID=$RESTORE_BOOT_UUID|" mnt/restore_boot/cmdline.txt
   else
@@ -735,6 +735,9 @@ function overwrite_cmdline_for_boot(){
     cat mnt/restore_boot/cmdline.txt
     exit 99
   fi
+
+  pr_ok "cmdline.txt after is"
+  cat mnt/restore_boot/cmdline.txt
 
   step_pause
 
