@@ -17,13 +17,13 @@ OPTIONS:
 
           generally its best to put this file in the current working directory
 
-   -l     A lite image
+   -l     A lite image  (optional)
+          use this option to provide a much smaller partition for the
+          recovery filesystem partition
+
           this should be an unzipped img containing 2 partitions
           usually this will be the lite image corresponding to a desktop
           image
-          the script will use this image to create the recovery partition
-          the lite image is usally much smaller than the rootfs partition on
-          the source image to slim down the resulting recovery image size
 
    -s     process in steps, outputting useful information and waiting for
           user to confirm before proceeding
@@ -155,3 +155,29 @@ do
 done
 
 shift $((OPTIND-1))
+
+if [ ! "${OPTION_BASE}" ] ; then
+    echo "-i     The source image is required."
+    echo "${MAGENTAFG} OPTION_BASE is required ${RESET}"
+    echo ""
+    usage
+    exit 1
+fi
+
+if [ ! -f "${OPTION_BASE}" ] ; then
+    echo "${ORANGEFG} the source image must exist ${RESET}"
+    ls "${OPTION_BASE}" || true
+    echo
+    usage
+    exit 1
+fi
+
+if [ "$OPT_USE_LITE" ] ; then
+  if [ ! -f "${OPTION_LITE}" ] ; then
+    echo "${ORANGEFG} if -l is given lite image must exist ${RESET}"
+    ls "${OPTION_LITE}" || true
+    echo
+    usage
+    exit 1
+  fi
+fi

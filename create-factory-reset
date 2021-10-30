@@ -114,4 +114,4 @@ if [ "${OPTION_CLEANUP_POST}" ]; then
 fi
 
 pr_header "finished"
-pr_info "RESTORE image is $BASE.restore.img"
+pr_info "RESTORE image is ${IMG_RESTORE}"
