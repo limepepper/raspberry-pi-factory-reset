@@ -1,18 +1,23 @@
+#!/bin/bash
 
+# default source image
+DEFAULT_BASE="2021-05-07-raspios-buster-armhf-lite"
 
-# DEFAULT_BASE=2018-03-13-raspbian-stretch-lite
-# DEFAULT_BASE=2018-06-27-raspbian-stretch-lite
-# DEFAULT_BASE=2018-10-09-raspbian-stretch-lite
-DEFAULT_BASE=2021-05-07-raspios-buster-armhf-lite
-DEFAULT_LITE=2021-05-07-raspios-buster-armhf-lite
+# check for user defined image(s)
+# if source image is not a lite image, assume lite image for recovery build later
+# remove path and extension
 
 BASE=${OPTION_BASE:-$DEFAULT_BASE}
 
-# if the BASE is a path, remove path and extension
 BASE="$(basename $BASE)"
 BASE="${BASE%.img}"
 
-LITE=${OPTION_LITE:-$DEFAULT_LITE}
+if [[ $BASE == *-lite ]]; then
+  LITE=${OPTION_LITE:-$BASE}
+else
+  LITE=${OPTION_LITE:-${BASE}-lite}
+fi
+
 LITE="$(basename $LITE)"
 LITE="${LITE%.img}"
 
