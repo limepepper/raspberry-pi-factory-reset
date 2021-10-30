@@ -75,7 +75,7 @@ fix_partuuid() {
 main () {
 
 
-cat << 'EOF' | tee logger
+cat << 'EOF'
 ##      _____          _
 ##     |  ___|_ _  ___| |_ ___  _ __ _   _
 ##     | |_ / _` |/ __| __/ _ \| '__| | | |
@@ -91,7 +91,7 @@ cat << 'EOF' | tee logger
 EOF
 
   echo "show blkid"
-  blkid
+  blkid -o list
   echo ""
 
   # dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
@@ -121,7 +121,7 @@ EOF
   echo "show filesystem size"
   df -h
 
-  echo "right before sleeping before using blkid"
+  echo "right before sleeping 10 before using blkid"
   sleep 10
 
   blkid || { echo "unable to run blkid, or error'ed" ; }
@@ -136,6 +136,7 @@ EOF
   blkid -o value -s UUID /dev/mmcblk0p1
   echo
   blkid
+  echo "sleeping 10"
   sleep 10
 
   [ "${P1_UUID}" ] || { echo "value not populated - ${P1_UUID}"; exit 99 ; }
@@ -215,14 +216,50 @@ EOF
   if [ -f /boot/restore_pi_pass ] ; then
     echo "copying old pi password into new rootfs"
     pi_pass="$(cat /boot/restore_pi_pass)"
-    usermod -R /mnt/rootfs -p "$pi_pass" pi
+
+    echo "password in restore_pi_pass is"
+    cat /boot/restore_pi_pass
+    echo "old pi passwd hash is "
+    cat /mnt/rootfs/etc/shadow | egrep '^pi'
+
+    # arm64 seems to have problems with -R option to usermod
+    # hence nasty workaround
+    if [ "$(uname -m)" = "aarch64" ]; then
+      echo "using workaround for aarch64"
+      awk -v var="${pi_pass}" \
+            -F: 'BEGIN{OFS=":";} $1=="pi"{$2=var}1' \
+            /mnt/rootfs/etc/shadow \
+            > /tmp/shadow.new.pi
+      cp /tmp/shadow.new.pi /mnt/rootfs/etc/shadow
+    else
+      usermod -R /mnt/rootfs -p "$pi_pass" pi
+    fi
+
+    echo "new pi passwd hash is "
+    cat /mnt/rootfs/etc/shadow | egrep '^pi'
+
+    sleep 20
     rm -f /boot/restore_pi_pass
   fi
+
 
   if [ -f /boot/restore_root_pass ] ; then
     echo "copying old root password into new rootfs"
     root_pass="$(cat /boot/restore_root_pass)"
-    usermod -R /mnt/rootfs -p "$root_pass" root
+
+    # arm64 seems to have problems with -R option to usermod
+    # hence nasty workaround
+    if [ "$(uname -m)" = "aarch64" ]; then
+      echo "using workaround for aarch64"
+      # root_pass=$(cat /boot/restore_root_pass | sed 's/\$/\\$/g')
+      awk -v var="${root_pass}" \
+            -F: 'BEGIN{OFS=":";} $1=="root"{$2=var}1' \
+            /mnt/rootfs/etc/shadow \
+            > /tmp/shadow.new.root
+      cp /tmp/shadow.new.root /mnt/rootfs/etc/shadow
+    else
+      usermod -R /mnt/rootfs -p "$root_pass" root
+    fi
     rm -f /boot/restore_root_pass
   fi
 
