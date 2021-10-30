@@ -49,6 +49,10 @@ function cleanup()
   # which no longer exist
   blkid --garbage-collect
 
+  if [ -d "$DIR/tmp" ] ; then
+    find "$DIR/tmp" -type f -exec rm '{}' \;
+  fi
+
   step_pause
 
 }
@@ -62,17 +66,17 @@ function get_partitions_for_original(){
 
   pr_info "(sizes in sectors)"
 
-  ORIG_P1_START=$(sfdisk --json $BASE.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img1\") .start ")
+  ORIG_P1_START=$(sfdisk --json $IMG_ORIG |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_ORIG}1\") .start ")
 
-  ORIG_P1_SIZE=$(sfdisk --json $BASE.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img1\") .size ")
+  ORIG_P1_SIZE=$(sfdisk --json $IMG_ORIG |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_ORIG}1\") .size ")
 
-  ORIG_P2_START=$(sfdisk --json $BASE.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img2\") .start ")
+  ORIG_P2_START=$(sfdisk --json $IMG_ORIG |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_ORIG}2\") .start ")
 
-  ORIG_P2_SIZE=$(sfdisk --json $BASE.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${BASE}.img2\") .size ")
+  ORIG_P2_SIZE=$(sfdisk --json $IMG_ORIG |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_ORIG}2\") .size ")
 
   echo ""
   pr_kv "ORIG_P1_START     :   ${ORIG_P1_START}"
@@ -81,9 +85,9 @@ function get_partitions_for_original(){
   pr_kv "ORIG_P2_SIZE      :   ${ORIG_P2_SIZE}"
   echo ""
 
-  ORIG_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $BASE.img)"
+  ORIG_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $IMG_ORIG)"
 
-  pr_p "Total bytes for original image  is $(stat --format=\"%s\" $BASE.img)"
+  pr_p "Total bytes for original image  is $(stat --format=\"%s\" $IMG_ORIG)"
 
 }
 
@@ -94,17 +98,17 @@ function get_partitions_for_lite(){
   pr_header "getting partition information for recovery source root image"
   pr_info "this is either a copy of the orig p2, or a lite p2, depending in i option"
 
-  LITE_P1_START=$(sfdisk --json ${LITE}.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${LITE}.img1\") .start ")
+  LITE_P1_START=$(sfdisk --json $IMG_LITE |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}1\") .start ")
 
-  LITE_P1_SIZE=$(sfdisk --json $LITE.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${LITE}.img1\") .size ")
+  LITE_P1_SIZE=$(sfdisk --json $IMG_LITE |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}1\") .size ")
 
-  LITE_P2_START=$(sfdisk --json $LITE.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${LITE}.img2\") .start ")
+  LITE_P2_START=$(sfdisk --json $IMG_LITE|
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}2\") .start ")
 
-  LITE_P2_SIZE=$(sfdisk --json $LITE.img |
-          jq ".partitiontable .partitions[] | select(.node == \"${LITE}.img2\") .size ")
+  LITE_P2_SIZE=$(sfdisk --json $IMG_LITE |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}2\") .size ")
 
   echo ""
   pr_kv "LITE_P1_START     :   ${LITE_P1_START}"
@@ -114,9 +118,9 @@ function get_partitions_for_lite(){
   echo ""
   echo ""
 
-  LITE_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $LITE.img)"
+  LITE_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $IMG_LITE)"
 
-  pr_info "Total bytes for lite image  is $(stat --format=\"%s\" $LITE.img)"
+  pr_info "Total bytes for lite image  is $(stat --format=\"%s\" $IMG_LITE)"
   echo ""
 }
 
@@ -312,7 +316,7 @@ function copy_original_to_copy(){
 
   pr_h3 "make a temporary copy of the fstab for later comparison"
 
-  cp mnt/copy_rootfs/etc/fstab tmp_fstab
+  cp mnt/copy_rootfs/etc/fstab "${DIR_TMP}/tmp_fstab"
 
   echo ""
 
@@ -370,11 +374,15 @@ function output_zipped_copy_rootfs(){
 
   pr_h2 "dd the copy p2 out to the recovery.img"
 
-  dd bs=4M if=${LOOP_COPY}p2 of=recovery.img
+  dd bs=4M if=${LOOP_COPY}p2 of="${DIR_TMP}/recovery.img"
 
   pr_h2 "zip the recovery.img"
 
-  zip recovery.img.zip recovery.img
+  if [ -f "${DIR_TMP}/recovery.img.zip" ] ; then
+    rm "${DIR_TMP}/recovery.img.zip"
+  fi
+
+  ( cd "${DIR_TMP}" && zip "recovery.img.zip" "recovery.img" )
 
   # protect rootfs from further changes
   # umount mnt/copy_rootfs
@@ -393,7 +401,7 @@ function make_loop_and_mount_lite(){
 
   pr_ok "show source image partition (from sfdisk --dump)"
 
-  sfdisk -d $IMG_LITE | pr_quote
+  sfdisk -d "$IMG_LITE" | pr_quote
 
   LOOP_LITE=$(losetup \
         --read-only \
@@ -453,7 +461,7 @@ function get_recovery_root_part_size(){
   pr_kv "LITE_USED_BYTES(GB) : $(( LITE_USED_BYTES / ( 1024 * 1024 ) ))"
   echo ""
 
-  RECOVERY_IMG_BYTES=$(stat --format="%s" recovery.img.zip)
+  RECOVERY_IMG_BYTES=$(stat --format="%s" "${DIR_TMP}/recovery.img.zip")
 
   pr_kv "RECOVERY_IMG_BYTES : $RECOVERY_IMG_BYTES"
   pr_kv "RECOVERY_IMG_BYTES(GB) : $(( RECOVERY_IMG_BYTES / ( 1024 * 1024 ) ))"
@@ -805,7 +813,7 @@ EOF
   sync
 
   #dd if=${LOOP_RESTORE}p3 of=mnt/restore_recovery/opt/recovery.img bs=4M
-  cp recovery.img.zip mnt/restore_recovery/opt/recovery.img.zip
+  cp "${DIR_TMP}/recovery.img.zip" mnt/restore_recovery/opt/recovery.img.zip
 
   # | zip mnt/restore_recovery/opt/recovery.img.zip -
 
@@ -819,7 +827,7 @@ function get_postbuild_summary(){
   inspect_loop_device $LOOP_RESTORE FINAL
 
   pr_h2 "/etc/fstab from source image"
-  cat tmp_fstab | egrep -v '^#|^$' | column -t | pr_quote
+  cat "${DIR_TMP}/tmp_fstab" | egrep -v '^#|^$' | column -t | pr_quote
   echo ""
 
   pr_h2 "/etc/fstab for recovery partition"

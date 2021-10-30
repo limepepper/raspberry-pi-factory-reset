@@ -91,7 +91,7 @@ cat << 'EOF'
 EOF
 
   echo "show blkid"
-  blkid -o list
+  blkid
   echo ""
 
   # dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
