@@ -208,13 +208,13 @@ function show_setup_var_summary(){
   pr_kv "SECTOR_BYTES         :  $SECTOR_BYTES"
   pr_kv "RESIZE_SCRIPT_SOURCE :  $RESIZE_SCRIPT_SOURCE"
 
-  if [ ! "$OPT_USE_LITE" ] ; then
+  if [ ! "$OPT_USE_SLIM" ] ; then
     echo
     pr_warn "only BASE image provided, so using base p2 as the recovery partition"
   fi
-  pr_kv "OPTION_LITE          :  ${OPTION_LITE}"
-  pr_kv "LITE                 :  $LITE"
-  pr_kv "IMG_LITE             :  $IMG_LITE"
+  pr_kv "OPTION_SLIM          :  ${OPTION_SLIM}"
+  pr_kv "SLIM                 :  $SLIM"
+  pr_kv "IMG_SLIM             :  $IMG_SLIM"
   echo ""
 
   step_pause

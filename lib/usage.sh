@@ -17,7 +17,7 @@ OPTIONS:
 
           generally its best to put this file in the current working directory
 
-   -l     A lite image  (optional)
+   -l     A slim image  (optional)
           use this option to provide a much smaller partition for the
           recovery filesystem partition
 
@@ -34,13 +34,13 @@ OPTIONS:
 EOF
 }
 
-OPT_USE_LITE=""   # is a lite image is provided?
+OPT_USE_SLIM=""   # is a slim image provided?
 
 
 OPTION_CLEANUP_PRE=""       # before starting, cleanup any previous runs
 OPTION_CLEANUP_POST=""      # after complete, cleanup loopback and mounts
 OPTION_BASE=""              # path to the base image
-OPTION_LITE=""              # path to the lite image
+OPTION_SLIM=""              # path to the slim image
 OPTION_STEPS=""             # pause after each step
 OPTION_DO_MAIN=""           # unset this to not do the main section
 
@@ -48,7 +48,7 @@ OPTION_DO_MAIN=""           # unset this to not do the main section
 # mostly for debugging/development
 OPT_DO_CHECKS=""            # whether to do file and package checks
 OPT_GET_PART_FOR_ORIG=""
-OPT_GET_PART_FOR_LITE=""    # get the lite image partition sizes
+OPT_GET_PART_FOR_SLIM=""    # get the slim image partition sizes
 OPT_MAKE_UUIDS=""
 OPT_MOUNT_ORIG=""
 OPT_MOUNT_COPY=""
@@ -56,7 +56,7 @@ OPT_COPY_TO_COPY=""
 OPT_FIX_ROOTFS_FSTAB=""
 OPT_FIX_RESIZE_SCRIPT=""
 OPT_MAKE_RECOVERY_ZIP=""
-OPT_MOUNT_LITE=""
+OPT_MOUNT_SLIM=""
 OPT_GET_RECOVERY_SIZES=""
 OPT_MOUNT_RESTORE=""
 OPT_COPY_TO_RESTORE=""
@@ -103,8 +103,8 @@ do
             OPT_FIXUP_RECOVERY_ROOTFS="1"
 
             #
-            OPT_GET_PART_FOR_LITE="1"
-            OPT_MOUNT_LITE="1"
+            OPT_GET_PART_FOR_SLIM="1"
+            OPT_MOUNT_SLIM="1"
 
             OPT_POST_SUMMARY="1"
 
@@ -132,10 +132,10 @@ do
          l)
             # vvv=$OPTARG
             # echo "processing l option"
-            OPTION_LITE=${OPTARG}
-            OPT_USE_LITE=1
-            OPT_GET_PART_FOR_LITE="1"
-            OPT_MOUNT_LITE="1"
+            OPTION_SLIM=${OPTARG}
+            OPT_USE_SLIM=1
+            OPT_GET_PART_FOR_SLIM="1"
+            OPT_MOUNT_SLIM="1"
          ;;
          # don't do slow operations, used for testing
          z)
@@ -172,10 +172,10 @@ if [ ! -f "${OPTION_BASE}" ] ; then
     exit 1
 fi
 
-if [ "$OPT_USE_LITE" ] ; then
-  if [ ! -f "${OPTION_LITE}" ] ; then
-    echo "${ORANGEFG} if -l is given lite image must exist ${RESET}"
-    ls "${OPTION_LITE}" || true
+if [ "$OPT_USE_SLIM" ] ; then
+  if [ ! -f "${OPTION_SLIM}" ] ; then
+    echo "${ORANGEFG} if -l is given slim image must exist ${RESET}"
+    ls "${OPTION_SLIM}" || true
     echo
     usage
     exit 1

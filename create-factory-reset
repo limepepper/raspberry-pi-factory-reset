@@ -44,10 +44,10 @@ fi
 # these are needed to create the copy of the original
 [ "$OPT_GET_PART_FOR_ORIG" ] && get_partitions_for_original
 
-# extract part start/sizes for lite image (if used)
-# we need the size of the root partition from the lite image
-# to calculate the total space required lite+recovery.zip+free space
-[ "$OPT_GET_PART_FOR_LITE" ] && get_partitions_for_lite
+# extract part start/sizes for slim image (if used)
+# we need the size of the root partition from the slim image
+# to calculate the total space required slim+recovery.zip+free space
+[ "$OPT_GET_PART_FOR_SLIM" ] && get_partitions_for_slim
 
 # to avoid conflicts, generate uuids for boot, recovery, root partions
 # @TODO not sure if this is actually needed.. to check that...
@@ -80,11 +80,11 @@ fi
 # zip the copy of the rootfs for use in restoring
 [ "$OPT_MAKE_RECOVERY_ZIP" ] && output_zipped_copy_rootfs
 
-# going to use the lite image for the recovery partition
-[ "$OPT_MOUNT_LITE" ] && make_loop_and_mount_lite
+# going to use the slim image for the recovery partition
+[ "$OPT_MOUNT_SLIM" ] && make_loop_and_mount_slim
 
 # calcule the required bytes and sectors for the restore p2 partition
-# from the recovery.zip plus the used space on the lite p2 partition
+# from the recovery.zip plus the used space on the slim p2 partition
 [ "$OPT_GET_RECOVERY_SIZES" ] && get_recovery_root_part_size
 
 # use the values to create a restore img file and mount it

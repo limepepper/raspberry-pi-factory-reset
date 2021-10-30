@@ -15,7 +15,7 @@ function cleanup()
 
   {
    for foo in copy_rootfs \
-                lite_rootfs \
+                slim_rootfs \
                 restore_boot \
                 restore_rootfs \
                 restore_recovery; do
@@ -27,7 +27,7 @@ function cleanup()
 #> /dev/null 2>&1
 
   pr_section "detaching any loopback devices" < <(
-  for imgname in $IMG_RESTORE $IMG_ORIG $IMG_LITE $IMG_COPY; do
+  for imgname in $IMG_RESTORE $IMG_ORIG $IMG_SLIM $IMG_COPY; do
     # echo "unounting $imgname"
     if [ -e "$imgname" ] ; then
       while losetup -a | grep "${imgname}" > /dev/null 2>&1; do
@@ -91,36 +91,36 @@ function get_partitions_for_original(){
 
 }
 
-# set the start and size of the 2 partitions in the lite image
+# set the start and size of the 2 partitions in the slim image
 # this might be the same as the source image
-function get_partitions_for_lite(){
+function get_partitions_for_slim(){
 
   pr_header "getting partition information for recovery source root image"
-  pr_info "this is either a copy of the orig p2, or a lite p2, depending in i option"
+  pr_info "this is either a copy of the orig p2, or a slim p2, depending in i option"
 
-  LITE_P1_START=$(sfdisk --json $IMG_LITE |
-          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}1\") .start ")
+  slim_P1_START=$(sfdisk --json $IMG_SLIM |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}1\") .start ")
 
-  LITE_P1_SIZE=$(sfdisk --json $IMG_LITE |
-          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}1\") .size ")
+  slim_P1_SIZE=$(sfdisk --json $IMG_SLIM |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}1\") .size ")
 
-  LITE_P2_START=$(sfdisk --json $IMG_LITE|
-          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}2\") .start ")
+  slim_P2_START=$(sfdisk --json $IMG_SLIM|
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}2\") .start ")
 
-  LITE_P2_SIZE=$(sfdisk --json $IMG_LITE |
-          jq ".partitiontable .partitions[] | select(.node == \"${IMG_LITE}2\") .size ")
+  slim_P2_SIZE=$(sfdisk --json $IMG_SLIM |
+          jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}2\") .size ")
 
   echo ""
-  pr_kv "LITE_P1_START     :   ${LITE_P1_START}"
-  pr_kv "LITE_P1_SIZE      :   ${LITE_P1_SIZE}"
-  pr_kv "LITE_P2_START     :   ${LITE_P2_START}"
-  pr_kv "LITE_P2_SIZE      :   ${LITE_P2_SIZE}"
+  pr_kv "slim_P1_START     :   ${slim_P1_START}"
+  pr_kv "slim_P1_SIZE      :   ${slim_P1_SIZE}"
+  pr_kv "slim_P2_START     :   ${slim_P2_START}"
+  pr_kv "slim_P2_SIZE      :   ${slim_P2_SIZE}"
   echo ""
   echo ""
 
-  LITE_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $IMG_LITE)"
+  slim_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $IMG_SLIM)"
 
-  pr_info "Total bytes for lite image  is $(stat --format=\"%s\" $IMG_LITE)"
+  pr_info "Total bytes for slim image  is $(stat --format=\"%s\" $IMG_SLIM)"
   echo ""
 }
 
@@ -393,32 +393,32 @@ function output_zipped_copy_rootfs(){
 }
 
 
-# if the lite image option was not provided, this will just be the same as
+# if the slim image option was not provided, this will just be the same as
 # the original image, losetup will resuse that loop device
-function make_loop_and_mount_lite(){
+function make_loop_and_mount_slim(){
 
-  pr_header "mount the liteversion of img readonly on loopback"
+  pr_header "mount the slimversion of img readonly on loopback"
 
   pr_ok "show source image partition (from sfdisk --dump)"
 
-  sfdisk -d "$IMG_LITE" | pr_quote
+  sfdisk -d "$IMG_SLIM" | pr_quote
 
-  LOOP_LITE=$(losetup \
+  LOOP_SLIM=$(losetup \
         --read-only \
         --nooverlap \
         --show \
         --find \
         --partscan \
-           ${IMG_LITE})
+           ${IMG_SLIM})
 
-  [ ! -z "$IMG_LITE" ] || { echo "IMG_LITE Empty: can't proceed"; exit 99; }
+  [ ! -z "$IMG_SLIM" ] || { echo "IMG_SLIM Empty: can't proceed"; exit 99; }
 
-  echo "The Original LITE img is mounted readonly at ${LOOP_LITE}"
-  partprobe ${LOOP_LITE}
+  echo "The Original SLIM img is mounted readonly at ${LOOP_SLIM}"
+  partprobe ${LOOP_SLIM}
   echo ""
 
-  UUID_BOOT_LITE="$(blkid -s UUID -o value ${LOOP_LITE}p1)"
-  [ ! -z "$UUID_BOOT_LITE" ] || { echo "UUID_BOOT Empty: can't proceed"; exit 99; }
+  UUID_BOOT_SLIM="$(blkid -s UUID -o value ${LOOP_SLIM}p1)"
+  [ ! -z "$UUID_BOOT_SLIM" ] || { echo "UUID_BOOT Empty: can't proceed"; exit 99; }
 
   # cat /proc/partitions
   # losetup -a
@@ -426,16 +426,16 @@ function make_loop_and_mount_lite(){
   # echo ""
 
 
-  mkdir -p mnt/lite_rootfs
+  mkdir -p mnt/slim_rootfs
 
-  if mount | grep mnt/lite_rootfs > /dev/null 2>&1; then
+  if mount | grep mnt/slim_rootfs > /dev/null 2>&1; then
     echo "already mounted"
   else
-    mount -r ${LOOP_LITE}p2 mnt/lite_rootfs
+    mount -r ${LOOP_SLIM}p2 mnt/slim_rootfs
   fi
 
 
-  inspect_loop_device $LOOP_LITE LITE
+  inspect_loop_device $LOOP_SLIM SLIM
 
   step_pause
 
@@ -445,20 +445,20 @@ function get_recovery_root_part_size(){
 
   pr_header "get recovery root part size"
 
-  pr_h3 "show the size in bytes of the lite rootfs"
-  df -B1 mnt/lite_rootfs | column -t | pr_quote
-  pr_h3 "show the size in human of the lite rootfs"
-  df -h mnt/lite_rootfs | column -t | pr_quote
+  pr_h3 "show the size in bytes of the slim rootfs"
+  df -B1 mnt/slim_rootfs | column -t | pr_quote
+  pr_h3 "show the size in human of the slim rootfs"
+  df -h mnt/slim_rootfs | column -t | pr_quote
   echo ""
 
-  LITE_SIZE_BYTES=$(df -B1 --output=size,used,avail mnt/lite_rootfs | tail -1 | awk '{print $1}')
-  LITE_USED_BYTES=$(df -B1 --output=size,used,avail mnt/lite_rootfs | tail -1 | awk '{print $2}')
-  LITE_FREE_BYTES=$(df -B1 --output=size,used,avail mnt/lite_rootfs | tail -1 | awk '{print $3}')
+  slim_SIZE_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $1}')
+  slim_USED_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $2}')
+  slim_FREE_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $3}')
 
-  pr_kv "LITE_SIZE_BYTES :   $LITE_SIZE_BYTES"
-  pr_kv "LITE_USED_BYTES :    $LITE_USED_BYTES"
-  pr_kv "LITE_FREE_BYTES :    $LITE_FREE_BYTES"
-  pr_kv "LITE_USED_BYTES(GB) : $(( LITE_USED_BYTES / ( 1024 * 1024 ) ))"
+  pr_kv "slim_SIZE_BYTES :   $slim_SIZE_BYTES"
+  pr_kv "slim_USED_BYTES :    $slim_USED_BYTES"
+  pr_kv "slim_FREE_BYTES :    $slim_FREE_BYTES"
+  pr_kv "slim_USED_BYTES(GB) : $(( slim_USED_BYTES / ( 1024 * 1024 ) ))"
   echo ""
 
   RECOVERY_IMG_BYTES=$(stat --format="%s" "${DIR_TMP}/recovery.img.zip")
@@ -468,7 +468,7 @@ function get_recovery_root_part_size(){
   echo ""
 
   # used, plus zipped, plus 150Mib of free space for whatever reason
-  RESTORE_P2_REQUIRED_BYTES=$(( LITE_USED_BYTES + RECOVERY_IMG_BYTES + 152428800 ))
+  RESTORE_P2_REQUIRED_BYTES=$(( slim_USED_BYTES + RECOVERY_IMG_BYTES + 152428800 ))
 
   pr_kv "RESTORE_P2_REQUIRED_BYTES : $RESTORE_P2_REQUIRED_BYTES"
   pr_kv "RESTORE_P2_REQUIRED_BYTES(GB) : $(( RESTORE_P2_REQUIRED_BYTES / ( 1024 * 1024 ) ))"
@@ -601,7 +601,7 @@ cat $tmpfile | pr_quote
 
 # populate the partitions of the restore image with the sources
 # the boot partition comes straight from the original
-# the recovery partition (p2) comes from the lite version, which might be
+# the recovery partition (p2) comes from the slim version, which might be
 # the same as the original partition, if it wasn't provided
 # the root is the modified copy of the rootfs partition
 function copy_to_restore(){
@@ -609,7 +609,7 @@ function copy_to_restore(){
   pr_header "3.4 copy the filesystem partitions to the restore img"
 
   dd if=${LOOP_ORIG}p1        of=${LOOP_RESTORE}p1    bs=4M
-  dd if=${LOOP_LITE}p2        of=${LOOP_RESTORE}p2    bs=4M
+  dd if=${LOOP_SLIM}p2        of=${LOOP_RESTORE}p2    bs=4M
   dd if=${LOOP_COPY}p2        of=${LOOP_RESTORE}p3    bs=4M
 
   # make sure the partitions on the loop device are available
@@ -636,12 +636,12 @@ function copy_to_restore(){
   e2fsck -f -n -v ${LOOP_RESTORE}p2 | pr_quote
 
   echo ""
-  pr_kv "LITE_SIZE_BYTES :   $LITE_SIZE_BYTES"
-  pr_kv "LITE_USED_BYTES :   $LITE_USED_BYTES"
-  pr_kv "LITE_FREE_BYTES :   $LITE_FREE_BYTES"
-  pr_kv "LITE_USED_BYTES(GB) : $(( LITE_USED_BYTES / ( 1024 * 1024 ) ))"
+  pr_kv "slim_SIZE_BYTES :   $slim_SIZE_BYTES"
+  pr_kv "slim_USED_BYTES :   $slim_USED_BYTES"
+  pr_kv "slim_FREE_BYTES :   $slim_FREE_BYTES"
+  pr_kv "slim_USED_BYTES(GB) : $(( slim_USED_BYTES / ( 1024 * 1024 ) ))"
   echo ""
-  # RESTORE_P2_REQUIRED_BYTES=$(( LITE_USED_BYTES + RECOVERY_IMG_BYTES + 152428800 ))
+  # RESTORE_P2_REQUIRED_BYTES=$(( slim_USED_BYTES + RECOVERY_IMG_BYTES + 152428800 ))
 
   pr_kv "RESTORE_P2_REQUIRED_BYTES : $RESTORE_P2_REQUIRED_BYTES"
   pr_kv "RESTORE_P2_REQUIRED_BYTES(GB) : $(( RESTORE_P2_REQUIRED_BYTES / ( 1024 * 1024 ) ))"

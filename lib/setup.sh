@@ -1,23 +1,24 @@
 #/bin/bash
 
+# the option is potentially relative, or a bare filename
+# convert this to an absolute file path
+IMG_ORIG="$(readlink -f ${OPTION_BASE})"
 
-# if the BASE is a path, remove path and extension
+# the BASE is a path, remove path and file extension
 # BASE is basically used by appending suffixes like .copy .restore
 # in order to generate intermediate files
 BASE=${OPTION_BASE}
 BASE="$(basename $BASE)"
 BASE="${BASE%.img}"
 
-IMG_ORIG="$(readlink -f ${OPTION_BASE})"
-
-if [ "$OPT_USE_LITE" ] ; then
-  LITE=${OPTION_LITE}
-  LITE="$(basename $LITE)"
-  LITE="${LITE%.img}"
-  IMG_LITE="$(readlink -f ${OPTION_LITE})"
+if [ "$OPT_USE_SLIM" ] ; then
+  SLIM=${OPTION_SLIM}
+  SLIM="$(basename $SLIM)"
+  SLIM="${SLIM%.img}"
+  IMG_SLIM="$(readlink -f ${OPTION_SLIM})"
 else
-  LITE="${BASE}"
-  IMG_LITE="${IMG_ORIG}"
+  SLIM="${BASE}"
+  IMG_SLIM="${IMG_ORIG}"
 fi
 
 mkdir -p "${DIR}/tmp"
@@ -44,7 +45,8 @@ RESIZE_SCRIPT_TARGET=/usr/lib/raspi-config/init_resize.sh
 
 MOTD_SHOW_LIVE=""
 MSG_CONTINUE="...press enter to continue"
-SECTOR_BYTES=512
 
+# @todo are these still needed?
+SECTOR_BYTES=512
 SECTOR_SIZE=512
 VERBOSITY=2
