@@ -1,62 +1,5 @@
 
 
-# rmeove any of the mounts of loopback devices
-# also unmount images from loopback devices
-function cleanup()
-{
-
-  pr_header "cleanup devices, mounts, etc"
-
-  pr_h2 "sync'ing filesystem"
-  # no idea if this makes any difference???
-  sync
-
-   pr_h2 "unmounting restore filesystems"
-
-  {
-   for foo in copy_rootfs \
-                slim_rootfs \
-                restore_boot \
-                restore_rootfs \
-                restore_recovery; do
-  umount -v -d "mnt/${foo}" || true
-  done
-
-  } | pr_section "unmounin"
-
-#> /dev/null 2>&1
-
-  pr_section "detaching any loopback devices" < <(
-  for imgname in $IMG_RESTORE $IMG_ORIG $IMG_SLIM $IMG_COPY; do
-    # echo "unounting $imgname"
-    if [ -e "$imgname" ] ; then
-      while losetup -a | grep "${imgname}" > /dev/null 2>&1; do
-        TMPLOOP="$(losetup -a | grep "${imgname}" | head -1| awk '{ print $1 }')"
-        TMPLOOP=${TMPLOOP%:}
-        # echo $TMPLOOP
-        losetup --detach ${TMPLOOP}
-        echo "detached ${TMPLOOP}"
-      done
-    fi
-  done
-  )
-
-  # if [ -f "${IMG_COPY}" ] ; then
-  #   rm "${IMG_COPY}"
-  # fi
-
-  # Perform a garbage collection pass on the blkid cache to remove devices
-  # which no longer exist
-  blkid --garbage-collect
-
-  if [ -d "$DIR/tmp" ] ; then
-    find "$DIR/tmp" -type f -exec rm '{}' \;
-  fi
-
-  step_pause
-
-}
-
 
 
 # get the start and size of each of the 2 partitions on the source image
@@ -98,27 +41,27 @@ function get_partitions_for_slim(){
   pr_header "getting partition information for recovery source root image"
   pr_info "this is either a copy of the orig p2, or a slim p2, depending in i option"
 
-  slim_P1_START=$(sfdisk --json $IMG_SLIM |
+  SLIM_P1_START=$(sfdisk --json $IMG_SLIM |
           jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}1\") .start ")
 
-  slim_P1_SIZE=$(sfdisk --json $IMG_SLIM |
+  SLIM_P1_SIZE=$(sfdisk --json $IMG_SLIM |
           jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}1\") .size ")
 
-  slim_P2_START=$(sfdisk --json $IMG_SLIM|
+  SLIM_P2_START=$(sfdisk --json $IMG_SLIM|
           jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}2\") .start ")
 
-  slim_P2_SIZE=$(sfdisk --json $IMG_SLIM |
+  SLIM_P2_SIZE=$(sfdisk --json $IMG_SLIM |
           jq ".partitiontable .partitions[] | select(.node == \"${IMG_SLIM}2\") .size ")
 
   echo ""
-  pr_kv "slim_P1_START     :   ${slim_P1_START}"
-  pr_kv "slim_P1_SIZE      :   ${slim_P1_SIZE}"
-  pr_kv "slim_P2_START     :   ${slim_P2_START}"
-  pr_kv "slim_P2_SIZE      :   ${slim_P2_SIZE}"
+  pr_kv "SLIM_P1_START     :   ${SLIM_P1_START}"
+  pr_kv "SLIM_P1_SIZE      :   ${SLIM_P1_SIZE}"
+  pr_kv "SLIM_P2_START     :   ${SLIM_P2_START}"
+  pr_kv "SLIM_P2_SIZE      :   ${SLIM_P2_SIZE}"
   echo ""
   echo ""
 
-  slim_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $IMG_SLIM)"
+  SLIM_TOTAL_IMG_BYTES="$(stat --format=\"%s\" $IMG_SLIM)"
 
   pr_info "Total bytes for slim image  is $(stat --format=\"%s\" $IMG_SLIM)"
   echo ""
@@ -222,7 +165,7 @@ function make_loop_and_mount_copy(){
   echo "writing $REPLY blocks of 8192"
 
   (
-  dd if=/dev/zero bs=8192 count=${REPLY} > ${IMG_COPY}
+  dd if=/dev/zero bs=8192 count=${REPLY} > "${IMG_COPY}"
   ) | pr_quote
 
   # fdisk -l ${IMG_RESTORE}
@@ -329,28 +272,6 @@ function copy_original_to_copy(){
 }
 
 
-# function fix_copy_rootfs_fstab(){
-
-#   pr_header "fixing root fstab"
-
-#   pr_ok "current live fsta /etc/fstab"
-#   cat mnt/copy_rootfs/etc/fstab  | column -t | pr_quote
-
-#   echo
-
-#   pr_ok "map the live fstab to the 3rd partition"
-
-# (column -t | tee mnt/copy_rootfs/etc/fstab ) <<EOF | pr_quote
-# proc                     /proc  proc    defaults          0       0
-# UUID=${ORIG_UUID_BOOT}   /boot  vfat    defaults          0       2
-# UUID=${UUID_ROOTFS}      /      ext4    defaults,noatime  0       1
-# EOF
-
-#   sync
-
-#   step_pause
-# }
-
 # doesn't wait for error message
 function fix_resize_script(){
 
@@ -451,14 +372,14 @@ function get_recovery_root_part_size(){
   df -h mnt/slim_rootfs | column -t | pr_quote
   echo ""
 
-  slim_SIZE_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $1}')
-  slim_USED_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $2}')
-  slim_FREE_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $3}')
+  SLIM_SIZE_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $1}')
+  SLIM_USED_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $2}')
+  SLIM_FREE_BYTES=$(df -B1 --output=size,used,avail mnt/slim_rootfs | tail -1 | awk '{print $3}')
 
-  pr_kv "slim_SIZE_BYTES :   $slim_SIZE_BYTES"
-  pr_kv "slim_USED_BYTES :    $slim_USED_BYTES"
-  pr_kv "slim_FREE_BYTES :    $slim_FREE_BYTES"
-  pr_kv "slim_USED_BYTES(GB) : $(( slim_USED_BYTES / ( 1024 * 1024 ) ))"
+  pr_kv "SLIM_SIZE_BYTES :   $SLIM_SIZE_BYTES"
+  pr_kv "SLIM_USED_BYTES :    $SLIM_USED_BYTES"
+  pr_kv "SLIM_FREE_BYTES :    $SLIM_FREE_BYTES"
+  pr_kv "SLIM_USED_BYTES(MB) : $(( SLIM_USED_BYTES / ( 1024 * 1024 ) ))"
   echo ""
 
   RECOVERY_IMG_BYTES=$(stat --format="%s" "${DIR_TMP}/recovery.img.zip")
@@ -468,7 +389,7 @@ function get_recovery_root_part_size(){
   echo ""
 
   # used, plus zipped, plus 150Mib of free space for whatever reason
-  RESTORE_P2_REQUIRED_BYTES=$(( slim_USED_BYTES + RECOVERY_IMG_BYTES + 152428800 ))
+  RESTORE_P2_REQUIRED_BYTES=$(( SLIM_USED_BYTES + RECOVERY_IMG_BYTES + PADDING_BYTES ))
 
   pr_kv "RESTORE_P2_REQUIRED_BYTES : $RESTORE_P2_REQUIRED_BYTES"
   pr_kv "RESTORE_P2_REQUIRED_BYTES(GB) : $(( RESTORE_P2_REQUIRED_BYTES / ( 1024 * 1024 ) ))"
@@ -620,7 +541,7 @@ function copy_to_restore(){
   # echo $UUID_RESTORE
   # echo $LOOP_RESTORE
 
-  # again we need to reset the UUID to avoid clash with the source partition
+  # reset the UUID to avoid clash with the source partition
   tune2fs ${LOOP_RESTORE}p2 -U ${UUID_RESTORE}
   e2label ${LOOP_RESTORE}p2 recoveryfs
 
@@ -636,12 +557,12 @@ function copy_to_restore(){
   e2fsck -f -n -v ${LOOP_RESTORE}p2 | pr_quote
 
   echo ""
-  pr_kv "slim_SIZE_BYTES :   $slim_SIZE_BYTES"
-  pr_kv "slim_USED_BYTES :   $slim_USED_BYTES"
-  pr_kv "slim_FREE_BYTES :   $slim_FREE_BYTES"
-  pr_kv "slim_USED_BYTES(GB) : $(( slim_USED_BYTES / ( 1024 * 1024 ) ))"
+  pr_kv "SLIM_SIZE_BYTES :   $SLIM_SIZE_BYTES"
+  pr_kv "SLIM_USED_BYTES :   $SLIM_USED_BYTES"
+  pr_kv "SLIM_FREE_BYTES :   $SLIM_FREE_BYTES"
+  pr_kv "SLIM_USED_BYTES(GB) : $(( SLIM_USED_BYTES / ( 1024 * 1024 ) ))"
   echo ""
-  # RESTORE_P2_REQUIRED_BYTES=$(( slim_USED_BYTES + RECOVERY_IMG_BYTES + 152428800 ))
+  # RESTORE_P2_REQUIRED_BYTES=$(( SLIM_USED_BYTES + RECOVERY_IMG_BYTES + 152428800 ))
 
   pr_kv "RESTORE_P2_REQUIRED_BYTES : $RESTORE_P2_REQUIRED_BYTES"
   pr_kv "RESTORE_P2_REQUIRED_BYTES(GB) : $(( RESTORE_P2_REQUIRED_BYTES / ( 1024 * 1024 ) ))"
@@ -826,6 +747,10 @@ function get_postbuild_summary(){
 
   inspect_loop_device $LOOP_RESTORE FINAL
 
+  pr_h2 "/boot/cmdline.txt from source image"
+  cat mnt/restore_boot/cmdline.txt_from_pristine
+  echo ""
+
   pr_h2 "/etc/fstab from source image"
   cat "${DIR_TMP}/tmp_fstab" | egrep -v '^#|^$' | column -t | pr_quote
   echo ""
@@ -838,12 +763,15 @@ function get_postbuild_summary(){
   cat mnt/restore_rootfs/etc/fstab  | egrep -v '^#|^$' | column -t | pr_quote
   echo ""
 
-  pr_h2 "/boot/cmdline.txt from source image"
-  cat mnt/restore_boot/cmdline.txt_from_pristine
-  echo ""
-
   pr_h2 "/boot/cmdline.txt for restore image"
   cat mnt/restore_boot/cmdline.txt
   echo ""
+
+  pr_h2 "show filesystem size/used/free - recovery"
+  df mnt/restore_recovery
+  df -h mnt/restore_recovery
+  pr_h2 "show filesystem size/used/free - rootfs"
+  df mnt/restore_rootfs
+  df -h mnt/restore_rootfs
 
 }

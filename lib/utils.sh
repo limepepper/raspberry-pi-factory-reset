@@ -287,3 +287,61 @@ function fixup_fstab(){
     echo
 
 }
+
+
+# rmeove any of the mounts of loopback devices
+# also unmount images from loopback devices
+function cleanup()
+{
+
+  pr_header "cleanup devices, mounts, etc"
+
+  pr_h2 "sync'ing filesystem"
+  # no idea if this makes any difference???
+  sync
+
+   pr_h2 "unmounting restore filesystems"
+
+  {
+   for foo in copy_rootfs \
+                slim_rootfs \
+                restore_boot \
+                restore_rootfs \
+                restore_recovery; do
+  umount -v -d "mnt/${foo}" || true
+  done
+
+  } | pr_section "unmounin"
+
+#> /dev/null 2>&1
+
+  pr_section "detaching any loopback devices" < <(
+  for imgname in $IMG_RESTORE $IMG_ORIG $IMG_SLIM $IMG_COPY; do
+    # echo "unounting $imgname"
+    if [ -e "$imgname" ] ; then
+      while losetup -a | grep "${imgname}" > /dev/null 2>&1; do
+        TMPLOOP="$(losetup -a | grep "${imgname}" | head -1| awk '{ print $1 }')"
+        TMPLOOP=${TMPLOOP%:}
+        # echo $TMPLOOP
+        losetup --detach ${TMPLOOP}
+        echo "detached ${TMPLOOP}"
+      done
+    fi
+  done
+  )
+
+  # if [ -f "${IMG_COPY}" ] ; then
+  #   rm "${IMG_COPY}"
+  # fi
+
+  # Perform a garbage collection pass on the blkid cache to remove devices
+  # which no longer exist
+  blkid --garbage-collect
+
+  if [ -d "$DIR/tmp" ] ; then
+    find "$DIR/tmp" -type f -exec rm '{}' \;
+  fi
+
+  step_pause
+
+}

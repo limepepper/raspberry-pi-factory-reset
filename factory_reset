@@ -130,11 +130,28 @@ fi
 
 if [ ! "${OPT_RESET}" ] && [ ! "${OPT_BOOT_RECOVERY}" ] &&
   [ ! "${OPT_BOOT_ROOT}" ] ; then
-    echo "${ORANGEFG}set only one of --boot-to-recovery, --boot-to-roor or --reset ${RESET}"
+    echo "${ORANGEFG}set only one of --boot-to-recovery, --boot-to-root or --reset ${RESET}"
     echo
     usage
     exit 1
 fi
+
+ROOT_PART_PARTUUID=$(blkid -s PARTUUID -o value \
+      /dev/disk/by-label/rootfs)
+ROOT_PART_UUID=$(blkid -s UUID -o value \
+      /dev/disk/by-label/rootfs)
+RECOVERY_PART_PARTUUID=$(blkid -s PARTUUID -o value \
+      /dev/disk/by-label/recoveryfs)
+RECOVERY_PART_UUID=$(blkid -s UUID -o value \
+      /dev/disk/by-label/recoveryfs)
+P1_UUID="$(blkid -o value -s UUID /dev/mmcblk0p1)"
+P2_UUID="$(blkid -o value -s UUID /dev/mmcblk0p2)"
+P3_UUID="$(blkid -o value -s UUID /dev/mmcblk0p3)"
+P1_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p1)"
+P2_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p2)"
+P3_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p3)"
+mkdir -p /mnt/recoveryfs
+mkdir -p /mnt/rootfs
 
 echo "factory restore script - resetting"
 
@@ -143,11 +160,42 @@ sleep 2
 if [ "${OPT_BOOT_ROOT}" ] ; then
   echo "booting to rootfs"
 
-  ROOT_PART_PARTUUID=$(blkid -s PARTUUID -o value \
-        /dev/disk/by-label/rootfs)
+    mount /dev/disk/by-label/rootfs /mnt/rootfs  || \
+      { [ $? -eq 32 ] && echo "already mounted" || \
+          { echo "some other error" ;  exit 99 ;}  }
 
-  ROOT_PART_UUID=$(blkid -s UUID -o value \
-        /dev/disk/by-label/rootfs)
+    fstab_file=/mnt/rootfs/etc/fstab
+
+
+    # @TODO this is repeated in a bunch of places, put in libs somewhere?
+    # check that /boot device mount was a partuuid
+    if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
+      echo "${ORANGEFG}/boot was a PARTUUID${RESET}"
+      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${P1_PARTUUID}      /boot     \3|" "$fstab_file"
+      fixed_boot=1
+    fi
+
+    # check that /boot device mount was a uuid
+    if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
+      echo "${ORANGEFG}/boot was a UUID${RESET}"
+      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${P1_UUID}      /boot     \3|" "$fstab_file"
+      fixed_boot=1
+    fi
+
+    # check that / device mount was a partuuid
+    if egrep '^PARTUUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+      echo "/ was a PARTUUID"
+      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|PARTUUID=${P3_PARTUUID}      /     \3|" "$fstab_file"
+      fixed_root=1
+    fi
+
+    # check that / device mount was a uuid
+    if egrep '^UUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+      echo "/ was a UUID"
+      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|UUID=${P3_UUID}      /     \3|" "$fstab_file"
+      fixed_root=1
+    fi
+
 
   if grep 'root=PARTUUID' /boot/cmdline.txt; then
     sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$ROOT_PART_PARTUUID|" \
@@ -164,26 +212,64 @@ if [ "${OPT_BOOT_ROOT}" ] ; then
 
   # sed -i "s/init=[^[:space:]]*//"  /boot/cmdline.txt
 
-  cat /boot/cmdline.txt
-  echo "rebooting in 10..."
-  sleep 10
-  [ ! "${OPT_NO_REBOOT}" ] && reboot || true
+  if [ ! "${OPT_NO_REBOOT}" ] ; then
+    umount -f /mnt/rootfs || true
+    cat /boot/cmdline.txt
+    echo "rebooting in 10..."
+    sleep 10
+    reboot
+  fi
 
   exit 0
 fi
 
-if [ "${OPT_BOOT_RECOVERY}" ] ; then
-  echo "booting to recovery"
+if [ "${OPT_BOOT_RECOVERY}" ] || [ "${OPT_RESET}" ] ; then
+  echo "booting to recoveryfs"
+
+    mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs  || \
+      { [ $? -eq 32 ] && echo "already mounted" || \
+          { echo "some other error" ;  exit 99 ;}  }
+
+    fstab_file=/mnt/recoveryfs/etc/fstab
+
+    # @TODO this is repeated in a bunch of places, put in libs somewhere?
+    # check that /boot device mount was a partuuid
+    if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
+      echo "${ORANGEFG}/boot was a PARTUUID${RESET}"
+      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${P1_PARTUUID}      /boot     \3|" "$fstab_file"
+      fixed_boot=1
+    fi
+
+    # check that /boot device mount was a uuid
+    if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
+      echo "${ORANGEFG}/boot was a UUID${RESET}"
+      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${P1_UUID}      /boot     \3|" "$fstab_file"
+      fixed_boot=1
+    fi
+
+    # check that / device mount was a partuuid
+    if egrep '^PARTUUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+      echo "/ was a PARTUUID"
+      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|PARTUUID=${P2_PARTUUID}      /     \3|" "$fstab_file"
+      fixed_root=1
+    fi
+
+    # check that / device mount was a uuid
+    if egrep '^UUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
+      echo "/ was a UUID"
+      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|UUID=${P2_UUID}      /     \3|" "$fstab_file"
+      fixed_root=1
+    fi
+
+  [ ! "${OPT_NO_REBOOT}" ] && umount -f /mnt/recoveryfs || true
+
+fi
+
+if [ "${OPT_BOOT_RECOVERY}" ] || [ "${OPT_RESET}" ] ; then
 
   echo "show current cmdline.txt"
   cat /boot/cmdline.txt
   echo ""
-
-  RECOVERY_PART_PARTUUID=$(blkid -s PARTUUID -o value \
-        /dev/disk/by-label/recoveryfs)
-
-  RECOVERY_PART_UUID=$(blkid -s UUID -o value \
-        /dev/disk/by-label/recoveryfs)
 
   if grep 'root=PARTUUID' /boot/cmdline.txt; then
     sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$RECOVERY_PART_PARTUUID|" \
@@ -198,38 +284,28 @@ if [ "${OPT_BOOT_RECOVERY}" ] ; then
     exit 99
   fi
 
-  cat /boot/cmdline.txt
-  [ ! "${OPT_NO_REBOOT}" ] && echo "rebooting in 10..." || true
-  [ ! "${OPT_NO_REBOOT}" ] && sleep 10 || true
-  touch /boot/ssh
+fi
 
-  [ ! "${OPT_NO_REBOOT}" ] && reboot || true
+if [ "${OPT_BOOT_RECOVERY}" ] ; then
+    echo "rebooting to recovery - not resetting"
 
-  exit 0
+    cat /boot/cmdline.txt
+    touch /boot/ssh
+
+    if [ ! "${OPT_NO_REBOOT}" ] ; then
+      umount -f /mnt/rootfs || true
+      cat /boot/cmdline.txt
+      echo "rebooting in 10..."
+      sleep 10
+      reboot
+    fi
+
+    exit 0
 fi
 
 
 if [ "${OPT_RESET}" ] ; then
     echo "resetting"
-
-    RECOVERY_PART_PARTUUID=$(blkid -s PARTUUID -o value \
-          /dev/disk/by-label/recoveryfs)
-
-    RECOVERY_PART_UUID=$(blkid -s UUID -o value \
-          /dev/disk/by-label/recoveryfs)
-
-    if grep 'root=PARTUUID' /boot/cmdline.txt; then
-      sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$RECOVERY_PART_PARTUUID|" \
-            /boot/cmdline.txt
-    elif grep 'root=UUID' /boot/cmdline.txt; then
-      sed -i -E "s|(root=UUID)=([^[:space:]]+)|root=UUID=$RECOVERY_PART_UUID|" \
-            /boot/cmdline.txt
-    else
-      echo "unable to find UUID or PARTUUID in cmdline.txt"
-      echo "current cmdline.txt is"
-      cat /boot/cmdline.txt
-      exit 99
-    fi
 
     # remove init option if we are still pre-resize mode. this would have to
     # be done manually from raspi-config after this...
@@ -238,75 +314,6 @@ if [ "${OPT_RESET}" ] ; then
     # add resize init script to end of boot option
     echo "$(cat /boot/cmdline.txt) init=/usr/lib/raspi-config/init_restore.sh" > /boot/cmdline.txt_tmp
     cp -f /boot/cmdline.txt_tmp /boot/cmdline.txt
-
-    echo "show rootfs fstab"
-    cat /etc/fstab | egrep -v '^#'
-    echo ""
-
-    echo "show recoveryfs fstab"
-    mkdir -p /mnt/recoveryfs
-    mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs  || \
-        { [ $? -eq 32 ] && echo "already mounted" || \
-            { echo "some other error" ;  exit 99 ;}  }
-
-    cat /mnt/recoveryfs/etc/fstab
-
-
-    P1_UUID="$(blkid -o value -s UUID /dev/mmcblk0p1)"
-    P2_UUID="$(blkid -o value -s UUID /dev/mmcblk0p2)"
-
-    P1_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p1)"
-    P2_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p2)"
-
-    # this junk copied from utils methds. needs @TODO refactoring
-    fstab_file=/mnt/recoveryfs/etc/fstab
-    boot_partuuid=$P1_PARTUUID
-    boot_uuid=$P1_UUID
-    root_partuuid=$P2_PARTUUID
-    root_uuid=$P2_UUID
-
-    [ "${boot_partuuid}" ] || { echo "value not populated - ${boot_partuuid}"; exit 99 ; }
-    [ "${boot_uuid}" ] || { echo "value not populated - ${boot_uuid}"; exit 99 ; }
-    [ "${root_partuuid}" ] || { echo "value not populated - ${root_partuuid}"; exit 99 ; }
-    [ "${root_uuid}" ] || { echo "value not populated - ${root_uuid}"; exit 99 ; }
-
-    if [ ! -f "$fstab_file" ] ; then
-      echo "$fstab_file is not a file"
-      exit 99
-    fi
-
-    # @TODO this is repeated in a bunch of places, put in libs somewhere?
-    # check that /boot device mount was a partuuid
-    if egrep '^PARTUUID=' "$fstab_file" | grep '/boot' ; then
-      echo "${ORANGEFG}/boot was a PARTUUID${RESET}"
-      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|PARTUUID=${boot_partuuid}      /boot     \3|" "$fstab_file"
-      fixed_boot=1
-    fi
-
-    # check that /boot device mount was a uuid
-    if egrep '^UUID=' "$fstab_file" | grep '/boot' ; then
-      echo "${ORANGEFG}/boot was a UUID${RESET}"
-      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/boot([[:space:]]+)(.*)|UUID=${boot_uuid}      /boot     \3|" "$fstab_file"
-      fixed_boot=1
-    fi
-
-    # check that / device mount was a partuuid
-    if egrep '^PARTUUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
-      echo "/ was a PARTUUID"
-      sed -i -E "s|^PARTUUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|PARTUUID=${root_partuuid}      /     \3|" "$fstab_file"
-      fixed_root=1
-    fi
-
-    # check that / device mount was a uuid
-    if egrep '^UUID=' "$fstab_file" | egrep '[[:space:]]/[[:space:]]' ; then
-      echo "/ was a UUID"
-      sed -i -E "s|^UUID=([^[:space:]]+)[[:space:]]+/([[:space:]]+)(.*)|UUID=${root_partuuid}      /     \3|" "$fstab_file"
-      fixed_root=1
-    fi
-
-    umount -f /mnt/recoveryfs
-    echo ""
-
 
     echo "show current cmdline.txt"
     cat /boot/cmdline.txt
@@ -345,9 +352,10 @@ OPT_COPY_WIFI=${OPT_COPY_WIFI}
 EOF
 
 
-    [ ! "${OPT_NO_REBOOT}" ] && echo "rebooting in 10..." || true
-    [ ! "${OPT_NO_REBOOT}" ] && sleep 10 || true
-
-    [ ! "${OPT_NO_REBOOT}" ] && reboot || true
-    exit 0
+    if [ ! "${OPT_NO_REBOOT}" ] ; then
+      cat /boot/cmdline.txt
+      echo "rebooting in 10..."
+      sleep 10
+      reboot
+    fi
 fi

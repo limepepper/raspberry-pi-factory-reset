@@ -61,14 +61,13 @@ OPT_GET_RECOVERY_SIZES=""
 OPT_MOUNT_RESTORE=""
 OPT_COPY_TO_RESTORE=""
 OPT_FIXUP_RECOVERY_ROOTFS=""
-
 OPT_FIX_CMDLINE_TXT=""
 OPT_MAKE_RESTORE_SCRIPT=""
 OPT_MAKE_RECOVERY_SCRIPT=""
-
 OPT_POST_SUMMARY=""
-
 OPT_RUN_TESTS=""
+
+OPT_SHOW_UUIDS="1"
 
 # no idea what half of these options were supposed to do
 # would be nice to switch to something that handled long opts
@@ -140,6 +139,11 @@ do
          # don't do slow operations, used for testing
          z)
             OPT_MAKE_RECOVERY_ZIP=""
+         ;;
+         # ru
+         # don't do slow operations, used for testing
+         u)
+            OPT_SHOW_UUIDS=""
          ;;
          # run tests and exit
          t)

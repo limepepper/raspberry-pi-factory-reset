@@ -50,3 +50,6 @@ MSG_CONTINUE="...press enter to continue"
 SECTOR_BYTES=512
 SECTOR_SIZE=512
 VERBOSITY=2
+
+# number of bytes to pad out the recoveryfs filesystem
+PADDING_BYTES=1097152000
