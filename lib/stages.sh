@@ -1,5 +1,31 @@
 
 
+# start and size of partitions on the source image
+# these are used to create intermediate and restore images
+ORIG_P1_START=""
+ORIG_P1_SIZE=""
+ORIG_P2_START=""
+ORIG_P2_SIZE=""
+ORIG_TOTAL_IMG_BYTES=""
+
+# we only really care about the P2, ie root start/size here
+# but plausibly we could validate features of the slim images
+# in that it is compatible with the rootfs/boot partitions
+SLIM_P1_START=""
+SLIM_P1_SIZE=""
+SLIM_P2_START=""
+SLIM_P2_SIZE=""
+SLIM_TOTAL_IMG_BYTES=""
+
+# new part UIs for copy of original images
+RESTORE_PTUUID_NEW=""
+COPY_PARTUUID_NEW=""
+
+# new UUIDs image
+UUID_RESTORE=""
+UUID_ROOTFS=""
+UUID_COPY_ROOTFS=""
+UUID_BOOT_SLIM=""
 
 
 # get the start and size of each of the 2 partitions on the source image
@@ -85,7 +111,7 @@ function make_uuids(){
 
   [ ! -z ${RESTORE_PTUUID_NEW} ] || {
     echo "RESTORE_PTUUID_NEW is empty '${RESTORE_PTUUID_NEW}'" && exit 99
-     }
+  }
 
   set +o pipefail
   COPY_PARTUUID_NEW=$(tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c8)
@@ -154,8 +180,8 @@ function make_loop_and_mount_copy(){
     pr_warn "IMG_COPY file ${IMG_COPY} already, exists - overwriting"
   } || \
   {
-    pr_ok "restore file ${IMG_RESTORE} creating"
-    # touch ${IMG_RESTORE}
+    pr_ok "restore file ${IMG_COPY} creating"
+    # touch ${IMG_COPY}
   }
 
   pr_ok "writing zeros to $IMG_COPY"

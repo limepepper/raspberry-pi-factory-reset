@@ -64,11 +64,6 @@ fi
 # copy the partitions from the source into the writable copy
 [ "$OPT_COPY_TO_COPY" ] && copy_original_to_copy
 
-# insert the generated UUID into the rootfs fstab from those generated earlier
-# @TODO if this is going to be done, it needs to search and replace rather than
-# template out the fstab... disabled as will probably break things as it is
-# [ "$OPT_FIX_ROOTFS_FSTAB" ] && fix_copy_rootfs_fstab
-
 # the resize script fails if the root partiion is not in position 2
 # so this needs to be copied into the copy image
 # @TODO not sure if this is still needed, as the current script checks the

@@ -2,6 +2,12 @@
 spacefiller='                           '
 
 # this tries to extract and display values produced by blkid
+parse_sfdisk_var(){
+  echo
+
+}
+
+# this tries to extract and display values produced by blkid
 parse_blkid_var(){
 
   [ "$#" -eq 4 ] || die "need 4 arguments"
@@ -15,18 +21,17 @@ parse_blkid_var(){
   # blkid -g refreshes the cache
   declare -r -g "${varname}"="$(blkid -s ${value} -o value ${devname})"
   [ ! -z "${!varname}" ] || {
-    pr_alert "${varname} Empty: can't proceed at ${BASH_LINENO}"
-    blkid ${devname}
-    echo $varname
-    echo $devname
-    pr_val prefix
-    pr_val value
-    pr_red "if the partuuid is missing, it seemed to be because something was"
-    pr_red "left mounted. unmounting all loop devices, and removing images from"
-    pr_red "loopback devices seemed to fix it"
-    exit 99
-
-    }
+      pr_alert "${varname} Empty: can't proceed at ${BASH_LINENO}"
+      blkid ${devname}
+      echo $varname
+      echo $devname
+      pr_val prefix
+      pr_val value
+      pr_red "if the partuuid is missing, it seemed to be because something was"
+      pr_red "left mounted. unmounting all loop devices, and removing images from"
+      pr_red "loopback devices seemed to fix it"
+      exit 99
+  }
   # echo "${varname}         : ${!varname}"
   printf '%s\n' "$GREEN$varname${spacefiller:${#varname}}$RESET : $ORANGEFG${!varname}$RESET"
 
@@ -317,16 +322,17 @@ function cleanup()
 
   pr_section "detaching any loopback devices" < <(
   for imgname in $IMG_RESTORE $IMG_ORIG $IMG_SLIM $IMG_COPY; do
-    # echo "unounting $imgname"
-    if [ -e "$imgname" ] ; then
+    echo "unounting $imgname"
+    # if [ -e "$imgname" ] ; then
       while losetup -a | grep "${imgname}" > /dev/null 2>&1; do
+        echo "$imgname was mounted... trying to remove"
         TMPLOOP="$(losetup -a | grep "${imgname}" | head -1| awk '{ print $1 }')"
         TMPLOOP=${TMPLOOP%:}
         # echo $TMPLOOP
         losetup --detach ${TMPLOOP}
         echo "detached ${TMPLOOP}"
       done
-    fi
+    # fi
   done
   )
 

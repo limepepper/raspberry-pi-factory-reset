@@ -112,7 +112,7 @@ do
           ;;
          c)
              # vvv=$OPTARG
-             OPTION_CLEANUP_PRE=1
+             OPTION_CLEANUP_PRE="1"
              OPTION_CLEANUP_POST=""
           ;;
          e)
@@ -133,15 +133,13 @@ do
             # echo "processing l option"
             OPTION_SLIM=${OPTARG}
             OPT_USE_SLIM=1
-            OPT_GET_PART_FOR_SLIM="1"
-            OPT_MOUNT_SLIM="1"
          ;;
          # don't do slow operations, used for testing
          z)
             OPT_MAKE_RECOVERY_ZIP=""
          ;;
-         # ru
-         # don't do slow operations, used for testing
+
+         # errr.. just show UUIDS?
          u)
             OPT_SHOW_UUIDS=""
          ;;
