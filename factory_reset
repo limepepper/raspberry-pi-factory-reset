@@ -136,6 +136,18 @@ if [ ! "${OPT_RESET}" ] && [ ! "${OPT_BOOT_RECOVERY}" ] &&
     exit 1
 fi
 
+if [ -b "/dev/mmcblk0" ]; then
+  DEVICE="/dev/mmcblk0p"
+elif [ -b "/dev/sda" ]; then
+  DEVICE="/dev/sda"
+fi
+
+if [ -z "${DEVICE}" ]; then
+  echo "${MAGENTAFG} expected /dev/mmcblk (SD card) or /dev/sda (USB disk) ${RESET}"
+  echo
+  exit 1
+fi
+
 ROOT_PART_PARTUUID=$(blkid -s PARTUUID -o value \
       /dev/disk/by-label/rootfs)
 ROOT_PART_UUID=$(blkid -s UUID -o value \
@@ -144,12 +156,12 @@ RECOVERY_PART_PARTUUID=$(blkid -s PARTUUID -o value \
       /dev/disk/by-label/recoveryfs)
 RECOVERY_PART_UUID=$(blkid -s UUID -o value \
       /dev/disk/by-label/recoveryfs)
-P1_UUID="$(blkid -o value -s UUID /dev/mmcblk0p1)"
-P2_UUID="$(blkid -o value -s UUID /dev/mmcblk0p2)"
-P3_UUID="$(blkid -o value -s UUID /dev/mmcblk0p3)"
-P1_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p1)"
-P2_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p2)"
-P3_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p3)"
+P1_UUID="$(blkid -o value -s UUID ${DEVICE}1)"
+P2_UUID="$(blkid -o value -s UUID ${DEVICE}2)"
+P3_UUID="$(blkid -o value -s UUID ${DEVICE}3)"
+P1_PARTUUID="$(blkid -o value -s PARTUUID ${DEVICE}1)"
+P2_PARTUUID="$(blkid -o value -s PARTUUID ${DEVICE}2)"
+P3_PARTUUID="$(blkid -o value -s PARTUUID ${DEVICE}3)"
 mkdir -p /mnt/recoveryfs
 mkdir -p /mnt/rootfs
 
@@ -229,6 +241,11 @@ if [ "${OPT_BOOT_RECOVERY}" ] || [ "${OPT_RESET}" ] ; then
     mount /dev/disk/by-label/recoveryfs /mnt/recoveryfs  || \
       { [ $? -eq 32 ] && echo "already mounted" || \
           { echo "some other error" ;  exit 99 ;}  }
+
+    P1_UUID="$(blkid -o value -s UUID ${DEVICE}1)"
+    P2_UUID="$(blkid -o value -s UUID ${DEVICE}2)"
+    P1_PARTUUID="$(blkid -o value -s PARTUUID ${DEVICE}1)"
+    P2_PARTUUID="$(blkid -o value -s PARTUUID ${DEVICE}2)"
 
     fstab_file=/mnt/recoveryfs/etc/fstab
 

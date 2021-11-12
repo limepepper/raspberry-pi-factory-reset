@@ -94,15 +94,27 @@ EOF
   blkid
   echo ""
 
-  # dd bs=4M if=/opt/recovery.img of=/dev/mmcblk0p3 conv=fsync status=progress
+  if [ -b "/dev/mmcblk0" ]; then
+    DEVICE="/dev/mmcblk0p"
+  elif [ -b "/dev/sda" ]; then
+    DEVICE="/dev/sda"
+  fi
+
+  if [ -z "${DEVICE}" ]; then
+    echo "${MAGENTAFG} expected /dev/mmcblk (SD card) or /dev/sda (USB disk) ${RESET}"
+    echo
+    exit 1
+  fi
+
+  # dd bs=4M if=/opt/recovery.img of=${DEVICE}3 conv=fsync status=progress
   unzip -p /opt/recovery.img.zip | \
           dd bs=4M \
-          of=/dev/mmcblk0p3 \
+          of=${DEVICE}3 \
           conv=fsync \
           status=progress
 
   # zipped partition had label copyroot
-  e2label /dev/mmcblk0p3 rootfs
+  e2label ${DEVICE}3 rootfs
 
   sleep 10
 
@@ -127,13 +139,13 @@ EOF
   blkid || { echo "unable to run blkid, or error'ed" ; }
 
   # @TODO should use labels to find these?
-  P1_UUID="$(blkid -o value -s UUID /dev/mmcblk0p1)"
-  P3_UUID="$(blkid -o value -s UUID /dev/mmcblk0p3)"
+  P1_UUID="$(blkid -o value -s UUID ${DEVICE}1)"
+  P3_UUID="$(blkid -o value -s UUID ${DEVICE}3)"
 
-  P1_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p1)"
-  P3_PARTUUID="$(blkid -o value -s PARTUUID /dev/mmcblk0p3)"
+  P1_PARTUUID="$(blkid -o value -s PARTUUID ${DEVICE}1)"
+  P3_PARTUUID="$(blkid -o value -s PARTUUID ${DEVICE}3)"
 
-  blkid -o value -s UUID /dev/mmcblk0p1
+  blkid -o value -s UUID ${DEVICE}1
   echo
   blkid
   echo "sleeping 10"
@@ -145,12 +157,7 @@ EOF
   [ "${P3_PARTUUID}" ] || { echo "value not populated - ${P3_PARTUUID}"; exit 99 ; }
 
   mkdir -p /mnt/rootfs
-  mount /dev/mmcblk0p3 /mnt/rootfs
-
-  # echo "show blkid for /dev/mmcblk0p3"
-  # blkid -o export /dev/mmcblk0p3
-  # echo "show blkid for /dev/mmcblk0p3 -p"
-  # blkid -p -o export /dev/mmcblk0p3
+  mount ${DEVICE}3 /mnt/rootfs
 
   if grep 'root=PARTUUID' /boot/cmdline.txt; then
     sed -i -E "s|(root=PARTUUID)=([^[:space:]]+)|root=PARTUUID=$P3_PARTUUID|" \
