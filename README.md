@@ -1,4 +1,7 @@
-> :warning: **This code was originally developed for a project back in 2018/2019**: I'm not actively working with rPi on a day to day basis, so I won't be adding features, and will fix bugs if I get the time. If someone wants to take over the project with a fork, I'd be happy to point users to it!
+> :warning: **This code was originally developed for a project back in 2018/2019**: I'm no longer actively working with rPi on a day to day basis, so I won't be adding features, and will only fix bugs if I get the time. If someone wants to take over the project with a fork, I'd be happy to point users to it!
+> :warning: **Please use the ideas here as a reference**: but it isn't going to be kept up to date.
+
+
 
 # Factory reset your Pi
 
