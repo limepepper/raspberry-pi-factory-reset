@@ -1,3 +1,5 @@
+> :warning: **This code was originally developed for a project back in 2018/2019**: I'm not actively working with rPi on a day to day basis, so I won't be adding features, and will fix bugs if I get the time. If someone wants to take over the project with a fork, I'd be happy to point users to it!
+
 # Factory reset your Pi
 
 :warning: Factory-resetting will delete any data off the root partition during
