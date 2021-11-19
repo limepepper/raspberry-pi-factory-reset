@@ -288,8 +288,7 @@ function fixup_fstab(){
 
 }
 
-
-# rmeove any of the mounts of loopback devices
+# remove any of the mounts of loopback devices
 # also unmount images from loopback devices
 function cleanup()
 {
